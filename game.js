@@ -566,7 +566,7 @@ const { hypot, exp, ceil, log } = Math;
 const TEAL = '#50F2C4', YEL = '#F2E205', RED = '#FF5A5A';
 const HY = 232;
 // modes
-const TITLE = 0, PLAY = 1, DLG = 2, CONT = 3, NAMES = 4, END = 5, SEL = 6;
+const TITLE = 0, PLAY = 1, DLG = 2, CONT = 3, NAMES = 4, END = 5, SEL = 6, SPL = 7;
 const pick = a => a[rand() * a.length | 0];
 const safe = (f, d) => { try { const r = f(); return r == null ? d : r; } catch (e) { return d; } };
 const ah = j => hit(P[0].K[j]) | hit(P[1].K[j]);
@@ -594,7 +594,7 @@ CUENTA REGRESIVA 96%`, 'M2 Wtc|vpt|cvt M3 Bl2a M2 Wxr|qcx|pvp M4 Wdcd|xrx M3 X B
 let AG, ia = 1;
 let spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
 let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX;
-let tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
+let sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
 const E = [], PO = [], PR = [], MG = new Set;
 
 // ---- more small helpers
@@ -1065,6 +1065,18 @@ const toTitle = () => {
   P.map(p => p.on = p.pl = 0);
   lvl = 1; setBg(); retex(); mus(0); vis(TI, 1); porSet(tP, 'fornax');
 };
+// boot splash: "PLATANUS HACK 26, CARACAS · presenta" between two Venezuelan flags (tricolour + arc of 8 stars);
+// fades in and out over 3.4 s, START or B1 skips
+const flag = (x, a) => {
+  rp(3, i => rect([0xffcc00, 0x00247d, 0xcf142b][i], a, x - 24, 264 + i * 11, 48, 11));
+  rp(8, i => circ(0xffffff, a, x + 10 * sin(i / 3.9 - .9), 289 - 7 * Math.cos(i / 3.9 - .9), 1.3));
+};
+const splUp = () => {
+  const a = min(1, (3.4 - mt) * 2, mt * 2), w = sp[0].width / 2 + 44;
+  G = hg; rect(0, 1, 0, 0, 800, 600); flag(400 - w, a); flag(400 + w, a);
+  vis(sp, 1); sp.map(t => t.alpha = a);
+  (mt < 0 || ah(4) | ah(7)) && (vis(sp, 0), toTitle());
+};
 const titleUp = dt => {
   const y = porUp(tP, dt * .5), n = tP.p * 10 | 0;
   tP.p < 1 || (tP.t += dt) < 2.5 || porSet(tP, 'fornax');
@@ -1117,7 +1129,7 @@ const hud = dt => {
   // hit: a red edge frame for ~250 ms (a full-screen flash hid the action)
   hf > 0 && sr(60, 0xff2040, 0, 0, 800, 600, hf * .5);
   hf -= dt * 4;
-  md > PLAY && rect(0x05020d, md == DLG ? .3 : .75, 0, 0, 800, 600);
+  md > PLAY && md < SPL && rect(0x05020d, md == DLG ? .3 : .75, 0, 0, 800, 600);
   ov.visible = md > DLG && md < SEL; oT.visible = md == END; eH.visible = md == END && mt < 28 && tm % 1 < .6;
   md == CONT && ov.setText(R`¿CONTINUAR?
 ${max(0, ceil(mt) - 1)}
@@ -1226,7 +1238,8 @@ ${h[1]} · ${h[2]}
   safe(() => AU.init(S.sound.context));
   store.get('qn-scores').then(r => scores = valid(r && r.value));
   store.get('qn-world').then(r => r && r.found && (world = r.value));
-  toTitle();
+  sp = [tx(400, 281, 26, WH, R`PLATANUS HACK 26, CARACAS`), tx(400, 334, 22, WH, 'presenta')];
+  toTitle(); vis(TI, 0); mode(SPL, 3.4);
 };
 const update = function (t, d) {
   const dt = min(d, 50) / 1000, v = md == PLAY ? (stp == 'M') * 1.8 : md == DLG ? spd : 1;
@@ -1238,7 +1251,7 @@ const update = function (t, d) {
   hg.clear(); dG.clear();
   // B6 (either player): neural upscaler ON/OFF at any time
   ah(9) && (ia ^= 1, retex(), pop(400, 300, iaT(), GOLD, 30));
-  md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && names()
+  md == SPL ? splUp() : md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && names()
     : md == CONT && (P.map(p => hit(p.K[7]) && (revive(p), md = PLAY, mus(BS.on ? 4 : lvl))), mt < 0 && md == CONT && (banner('GAME OVER', '', PH[1]), names()));
   draw(dt);
   hud(dt);
