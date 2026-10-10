@@ -1,10 +1,9 @@
 // ARRIVALS: LA INVASIÓN — the game: title, hero select, co-op rail shooter, dialogue, HUD, continue, names, leaderboard.
 {
 // the minifier hands out its 54 one-letter names in declaration order, so the most used bindings are declared first
-let md, G, S, lvl, mt, T, tP, stp, cam, bgSh, run, world, bg, DL;
+let md, G, S, lvl, mt, T, tP, stp, cam, bgSh, run, world, bg, DL, VS;
 let tm = 0, M = {}, scores = [];
 // hot helpers and tables (the rest of the helpers follow below)
-const BS = {};
 // String.raw tag: the minifier keeps tagged templates as raw UTF-8 (accents cost 2 bytes, not 4)
 const R = String.raw;
 const PH = ['#D9F21B', '#FF4FD8'];
@@ -55,16 +54,21 @@ const mode = (m, t) => (md = m, mt = t, clearHits());
 const kill = (e, p, s) => {
   e.de = .22; hs = .04; au('kill');
   boom(20, e.X, e.C);
-  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen)), in gold when x1.5 or better
+  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen))
   const f = 2 / (1 + log(1 + tm - e.b));
-  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H, f < 1.5 ? p.H : GOLD);
+  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H);
   s && pop(e.X, e.Y - e.H - 20, up(s), WC[s]);
 };
 const { hypot, exp, ceil, log } = Math;
+const BS = {}, B2 = {}, BB = [BS, B2];
+// VS: P2's Primero per hero slot (same weapon behaviour as that hero)
+const AL = [['phelios', 'VOID CLAW'], ['vidnah', 'BIO SPORE'], ['phaenon', 'NEOCRUSH']];
+// VS: is t on the side player p fights (P1 fights the Primeros, P2 the humans)? h = t is human
+const foe = (p, h) => !VS || !h == !p.i;
 const TEAL = '#50F2C4', YEL = '#F2E205', RED = '#FF5A5A';
 const HY = 232;
 // modes
-const TITLE = 0, PLAY = 1, DLG = 2, CONT = 3, NAMES = 4, END = 5, SEL = 6;
+const TITLE = 0, PLAY = 1, DLG = 2, CONT = 3, NAMES = 4, END = 5, SEL = 6, SPL = 7;
 const pick = a => a[rand() * a.length | 0];
 const safe = (f, d) => { try { const r = f(); return r == null ? d : r; } catch (e) { return d; } };
 const ah = j => hit(P[0].K[j]) | hit(P[1].K[j]);
@@ -79,7 +83,9 @@ const WC = { qawakun: GOLD, fornax: PH[0], phelios: PH[1], sumer: TEAL, vidnah: 
 const ET = {
   d: ['drone', 1, 100, .5, .9, 1, 2.2, 3.6, 1.1, .8, 1.7, .15, 0], t: ['trooper', 2, 150, 1.15, 1.1, 1, 2.6, 4.4, 1, .9, .9, 0, 0],
   v: ['vandal', 1, 120, 1.1, .75, 0, 3, 4.5, .7, .5, 4, 0, .6], p: ['purun', 6, 300, 1.4, 1.3, 0, 2.6, 3.4, .4, .08, 1.2, .05, .15],
-  c: ['civ', 1, 0, 1.05, 0, 2, 2.6, 4, .3] };
+  c: ['civ', 1, 0, 1.05, 0, 2, 2.6, 4, .3],
+  // VS: armed human militia (tinted civilians) that only attack P2
+  m: ['civ', 1, 120, 1.05, .9, 1, 2.6, 4, .8, .6, 1, 0, 0] };
 // level: name, mission + countdown, script (M move s, W waves with | groups, B story beat, X boss)
 const LV = [
   ['CENTRO DE CARACAS', R`Defiende la antena del Ávila
@@ -90,10 +96,10 @@ CUENTA REGRESIVA 96%`, 'M2 Wtc|vpt|cvt M3 Bl2a M2 Wxr|qcx|pvp M4 Wdcd|xrx M3 X B
 5.143333°  -60.762500°`, 'M3 Wxtx|cxd|vxv M3 Bl3a M2 Wpxt|xvx|dpd M3 X Bl3b']];
 
 let AG, ia = 1;
-let spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
-let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX;
-let tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
-const E = [], PO = [], PR = [], MG = new Set;
+let NW = 1, spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
+let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX, VD;
+let sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
+const KS = 'qn-scores', KW = 'qn-world', E = [], PO = [], PR = [], MG = new Set, VE = [0xffcc00, 0x00247d, 0xcf142b];
 
 // ---- more small helpers
 const ring = (w, c, a, x, y, r) => G.lineStyle(w, c, a).strokeCircle(x, y, r);
@@ -103,19 +109,21 @@ const sr = (w, c, x, y, W, H, a) => G.lineStyle(w, c, a).strokeRect(x, y, W, H);
 const box = (c, x, y, w, h) => G.fillStyle(0x0d0620, .9).fillRoundedRect(x, y, w, h, 12).lineStyle(3, c).strokeRoundedRect(x, y, w, h, 12);
 const u = o => (UL.add(o), o);
 // texture choice in one place: SEÑAL <= 1 shows raw low-res; else the CNN (IA ON) or plain bicubic (IA OFF)
-const tk = k => !lr && T.exists(k + '_hd') ? k + (ia ? '_hd' : '_bc') : T.exists(k) ? k : 'p';
+const tk = k => !lr && T.exists(k + '_hd') ? k + (ia ? '_hd' : '_bc') : k;
 const retex = () => MG.forEach(o => o.setTexture(tk(o.k)) && o.dw && o.setDisplaySize(o.dw, o.dh));
 const arr = v => Array.isArray(v) ? v : [];
 const hsh = n => abs(sin(n * 78.23 + lvl * 3.7) * 43758.5) % 1;
 const beat = id => sto('beat', null, run, id);
-const cyc = (k, a, b, v, n) => (hit(k[a]) && (v = (v + n - 1) % n, au('beep')), hit(k[b]) && (v = (v + 1) % n, au('beep')), v);
+const cyc = (k, a, b, v, n, u = hit(k[a]), d = hit(k[b])) => ((u || d) && au('beep'), (v + n + d - u) % n);
 const flash = d => cam.flash(d, 248, 194, 11);
 // buttons of each player who has not confirmed yet
 const each = f => P.map(p => p.ok || f(p, p.K));
-const tint = (s, f, c) => f ? s.setTintFill(0xffffff) : c ? s.setTint(c) : s.clearTint();
+const tint = (s, f, c) => f ? s.setTintFill(0xffffff) : s.setTint(c || 0xffffff);
 const foes = () => E.filter(e => e.on && !e.de && e.k != 'c');
 const live = () => P.filter(p => p.on && p.hp > 0);
 const ok = t => t && t.hp > 0 && !t.de;
+// +1 SEÑAL for every living player (Vidnah)
+const vheal = () => (live().map(p => p.hp < p.mx && p.hp++), au('heal'), pop(400, 200, R`VIDNAH: +1 SEÑAL`, TEAL));
 const banner = (a, b, c) => { pop(400, 150, a, c, 36, 3000); pop(400, 205, b, WH, 20, 3000); };
 // one shared overlay text for continue / name entry / ending
 const ovSet = (z, c, y, s = '') => ov.setFontSize(z).setColor(c).setY(y).setText(s);
@@ -130,26 +138,21 @@ const porVis = (o, v) => vis([o.l, o.h], v);
 
 // ---- scenes: perspective quads in world space (x lateral, h height, z depth); far parts fade into the dark
 const Q = (c, a, ...v) => { G.fillStyle(c, a).beginPath(); for (let i = 0; i < 12; i += 3) G.lineTo(PX(v[i], v[i + 2]), PY(v[i + 1], v[i + 2])); G.fillPath(); };
-const hq = (c, a, x0, x1, h, z0, z1) => Q(c, a, x0, h, z0, x1, h, z0, x1, h, z1, x0, h, z1);
+// a floor/ceiling quad at height h, or (z0 == z1) an upright face from h up to h1, narrowing by t at the top
+const hq = (c, a, x0, x1, h, z0, z1, h1 = h, t = 0) => Q(c, a, x0, h, z0, x1, h, z0, x1 - t, h1, z1, x0 + t, h1, z1);
 const fq = (c, x0, x1, h = 0) => hq(c, 1, x0, x1, h, .4, 40);
 const scene = () => {
   const l = lvl, m = l == 2;
   G = gg.clear();
-  // ground: avenue + sidewalks / metro platform, track pit and ceiling / dark fog under the Roraima backdrop
+  // ground: avenue + sidewalks / metro: light concrete platform with its yellow safety line, the (black) track pit with two steel rails
+  // on dark-blue supports, the ceiling with two long fluorescent strips (Roraima: the painted bg3 is the ground)
   if (l < 2) fq(0x48424f, -2.6, 2.6), fq(0x24212b, -1.7, 1.7);
-  else if (m) fq(0x6e6c74, -2.2, 1.3), fq(0x101014, 1.3, 4, -.5), fq(0x1c1a22, -2.2, 4, 2.8);
-  else {
-    // Roraima: the tepuy's flat top and sheer walls on the horizon, a thin waterfall and low clouds
-    Q(0x141c26, .9, -14, 1, 30, 8, 1, 30, 7, 9.5, 30, -13, 9.5, 30);
-    line(2, 0xcfe8ff, .6, PX(2, 30), PY(9.5, 30), PX(2, 30), PY(1, 30));
-    rp(2, i => G.fillStyle(0xffffff, .12).fillEllipse(PX(i * 12 - 9, 30), PY(i + .5, 30), 330, 26));
-    rp(12, i => rect(0x08060c, i * .07, 0, 380 + i * 20, 800, 20));
-  }
+  else if (m) fq(0x1d3a8c, 1.95, 2.95, -.49), rp(2, i => fq(0xc8c8d0, 2.16 + i * .6, 2.24 + i * .6, -.47)), fq(0x9c968a, -2.2, 1.3), fq(0xf2c200, 1.02, 1.3), fq(0x1c1a22, -2.2, 4, 2.8), rp(2, i => fq(0xe8eeff, i * 1.7 - 1.3, i * 1.7 - 1.18, 2.78));
   for (let j = 13; j >= 0; j--) {
     const n = (cz / 3 | 0) + j, Z = n * 3 - cz, z0 = max(.4, Z), z1 = Z + 3, a = cl(1.7 - z0 / 15, 0, 1), sl = n % 2 * 2 - 1, X = sl * 1.85;
     if (z1 < .5) continue;
     WA = a;
-    // lane dash and a street lamp (alternating curbs) with its power line / a ceiling light
+    // lane dash and a street lamp (alternating curbs) with its power line
     if (l < 2) {
       hq(0xd8d0b0, a, -.05, .05, 0, z0, max(z0, Z + 1));
       if (Z > .4) {
@@ -157,9 +160,9 @@ const scene = () => {
         line(max(1, 18 / Z), 0x4a4658, a, x, PY(0, Z), x, y).lineStyle(1, 0).lineBetween(x, y, PX(X, Z + 6), PY(2.7, Z + 6));
         circ(0xffd27a, a * .3, x, y, 70 / Z); circ(0xffffff, a, x, y, 7 / Z + 1);
       }
-    } else m && hq(0xf0f0ff, a, -.4, .4, 2.78, z0, max(z0, Z + .6));
+    }
     for (let s = -1; s < 2; s += 2) {
-      const r = hsh(n * 2 + s), X = WX = m && n < 7 && s > 0 ? 1.5 : s * (m ? 2.2 : 2.6);
+      const r = hsh(n * 2 + s), X = WX = m ? s < 0 ? -2.2 : n > 1 && n < 7 ? 1.5 : 3.6 : s * 2.6;
       if (l < 2) {
         // facades: lit windows, shop shutters and signs
         const h = 2.4 + r * 3.6;
@@ -168,18 +171,21 @@ const scene = () => {
         wall([0xff4fd8, 0x50f2c4, 0xf2e205, 0xff6a3d][n % 4], Z + .6, Z + 2.2, .95, 1.25);
         for (let f = 1.6; f < h - .5; f++) rp(2, c => wall(hsh(n * 9 + f * 3 + c + s) < .35 ? 0xffd27a : 0x15131e, Z + .6 + c * 1.4, Z + 1.3 + c * 1.4, f, f + .6));
       } else if (m && n < 7)
-        // metro: tiled wall with the orange signage strip / the stopped train with lit windows
-        s < 0 ? (wall(0xcfc7b8, z0, z1, 0, 2.8), wall(0xf08a24, z0, z1, 1.7, 2.1)) : (wall(0x9aa4b4, z0, z1, -.4, 1.6), wall(0xfff0c0, Z + .5, Z + 2.5, .7, 1.3));
+        // metro: pale panel walls (dark seams between them) with the orange signage strip (also across the tracks ahead of the train) /
+        // the parked train: white body, lit windows, the yellow-blue-red stripe and, first, its rounded cab
+        s < 0 || n < 2 ? (wall(0xe2dacb, z0, z1 - .08, 0, 2.8), wall(0xf08a24, z0, z1, 1.7, 2.1))
+          : (wall(0xdfe3ea, z0, z1, -.4, 1.9), wall(0xfff0c0, Z + .3, Z + 2, .75, 1.4),
+            rp(3, i => wall(VE[i], z0, z1, .66 - (i *= .08), .74 - i)),
+            n < 3 && Z > .5 && (hq(0xff4a1c, a, 1.5, 3.5, -.4, Z, Z, 1.9, .2), hq(0x111111, a, 1.7, 3.3, .25, Z, Z, 1.75, .15),
+              rp(2, i => circ(0xfff6c0, a, PX(1.9 + i * 1.2, Z), PY(.42, Z), 30 / Z))));
       // tunnel: dark walls with passing lights
       else if (m) wall(0x1c1a20, z0, z1, -.5, 2.8), Z > .5 && circ(0xffe0a0, a, PX(X * .95, Z), PY(1.8, Z), 40 / Z);
-      // roraima: rock ledges
-      else wall(0x4d5a3e, z0, z1, 0, .5 + r * .7);
     }
   }
   // cars and motorbikes parked along the curbs or crashed: depth-sorted sprites enemies use as cover
   rp(8, j => {
     const n = (cz / 4 | 0) + j, o = PR[n % 8], z = n * 4 + hsh(n) * 2 - cz, mo = hsh(n + 3) < .3, cr = hsh(n + 7) < .3, s = o.s, k = mo ? 'moto' : 'car';
-    s.visible = o.on = l < 2 && z > .6 && T.exists(k); o.x = (hsh(n + 9) < .5 ? -1 : 1) * (cr ? .5 : mo ? 1.45 : 1.15); o.z = z;
+    s.visible = o.on = l < 2 && z > .6; o.x = (hsh(n + 9) < .5 ? -1 : 1) * (cr ? .5 : mo ? 1.45 : 1.15); o.z = z;
     o.on && pos(stx(s, k).setTint([0xd04040, 0x4060d0, 0xe0e0e0, 0x555560, 0xe0b030][n % 5]), PX(o.x, z), PY(0, z), (mo ? 280 : 700) / z / s.frame.width, 40 - z);
   });
 };
@@ -188,25 +194,27 @@ const scene = () => {
 const spawn = k => {
   const e = E.find(e => !e.on), sd = rand() < .5 ? -1 : 1, c = k == 'x' && M.ally != 'vidnah', cv = pick(PR.filter(o => o.on && o.z > 2 && o.z < 5.5)), r = rand();
   k = { x: 't', r: M.m ? 'v' : 't', q: M.m ? 'd' : 'c' }[k] || k;
+  VS && (k == 'c' || k != 'p' && rand() < .45) && (k = 'm');
   const d = ET[k], z = rnd(d[6], d[7]), gr = k == 't' || k == 'v';
   if (!e) return;
   stx(e.s, d[0]).visible = 1;
   OA(e, { b: tm, on: 1, k, d, hp: d[1] + (lvl > 2 && k == 't'), st: 0, cl: c, r: rnd(0, 6), t: rnd(1.5, 3), de: 0, fl: 0,
-    x: sd * 2.3, z, h: k == 'd' ? 3 : 0, x1: k == 'c' ? -sd * 3.5 : rnd(-1, 1), z1: z, h1: k == 'd' ? rnd(.45, 1) : 0 });
-  // pop-out origins (House of the Dead): out of a doorway, off a rooftop, from behind a car, out of the train, or from the depth
-  if (k == 'p') e.x = rnd(-1, 1), e.z = 9;
+    x: sd * 2.3 * NW, z, h: k == 'd' ? 3 : 0, x1: (k == 'c' ? -sd * 3.5 : rnd(-1, 1)) * NW, z1: z, h1: k == 'd' ? rnd(.45, 1) : 0 });
+  // pop-out origins (House of the Dead; on the Roraima platform everything is narrower): out of a doorway, off a rooftop, from behind a car, out of the train, or from the depth
+  if (k == 'p') e.x = rnd(-1, 1) * NW, e.z = 9;
   else if (gr && lvl == 2) e.x = 1.5, e.x1 = rnd(-1.6, .8);
   else if (gr && cv && r < .5) e.x = cv.x, e.z = e.z1 = cv.z + .3, e.x1 = cv.x * .2;
   else if (gr && r < .75) e.h = 3;
   return e;
 };
-const shot = (x, h, z, c) => { const b = B.find(b => !b.on); b && (OA(b, { on: 1, x, h, z, v: (z - .7) / 1.6 * AG }).s.setTint(c).visible = 1); };
+// an enemy shot flying at the camera; g = an artillery zone on the ground that blows up after g seconds
+const shot = (x, h, z, c, g, T) => { const b = B.find(b => !b.on); b && (OA(b, { on: 1, x, h, z, g, T, v: (z - .7) / 1.6 * AG }).s.setTint(c).visible = 1); };
 const eUp = (e, dt) => {
   if (e.de) return (e.de -= dt) <= 0 && off(e);
   const d = e.d, f = min(1, dt * (e.st ? 3 : d[8] * 2)), a = tm * d[10] + e.r;
   // approach the stop point; once active: drones fly a figure-8 and dive to attack, raiders zig-zag in,
   // guardians stomp forward, troopers strafe and duck behind cover (melee enemies step back in after a hit)
-  e.x += (e.x1 + (e.st && sin(a) * d[9]) - e.x) * f;
+  e.x += (e.x1 + (e.st && sin(a) * d[9] * NW) - e.x) * f;
   e.z += (e.z1 * (e.k == 'd' && e.st > 1 ? .6 : 1) - e.z) * f;
   e.h += (e.h1 + (e.st && d[11] * (1 + sin(a * 2))) - e.h) * f;
   if (!e.st) {
@@ -220,7 +228,8 @@ const eUp = (e, dt) => {
   if (e.st < 2) e.dk || (e.t -= dt * AG) <= 0 && (d[5] || e.z < 2.4) && (e.st = 2, e.tt = d[4], au('beep'));
   else if ((e.tt -= dt) <= 0) {
     e.st = 1; e.t = rnd(1.8, 3.4);
-    d[5] ? shot(e.x, e.h + d[3] * .5, e.z - .2, e.k == 'd' ? 0x50f2c4 : 0xff3d6e) : (hurt(), e.z += .7);
+    const T = VS ? +(e.k == 'm') : null;
+    d[5] ? shot(e.x, e.h + d[3] * .5, e.z - .2, e.k == 'd' ? 0x50f2c4 : 0xff3d6e, 0, T) : (hurt(T), e.z += .7);
   }
 };
 const eDraw = (e, dt) => {
@@ -228,86 +237,124 @@ const eDraw = (e, dt) => {
   const c = h / s.frame.height, w = e.W = pos(s, x, y, c, 40 - e.z, c * (e.dk ? .55 : 1)).displayWidth;
   e.C = y - h / 2;
   gg.fillStyle(0, .4).fillEllipse(x, PY(0, e.z), w * .9, h * .1 + 2);
-  tint(s, e.de > 0 || (e.fl -= dt) > 0, e.st > 1 && tm * 9 % 2 < 1 && 0xff4060);
-  s.setAlpha(e.de > 0 ? e.de * 4.5 : e.cl && e.st < 2 ? .13 + .08 * sin(tm * 30) : 1);
+  tint(s, e.de > 0 || (e.fl -= dt) > 0, e.st > 1 && tm * 9 % 2 < 1 && 0xff4060 || e.k == 'm' && 0xffa040);
+  s.alpha = e.de > 0 ? e.de * 4.5 : e.cl && e.st < 2 ? .13 + .08 * sin(tm * 30) : 1;
   // telegraph: red countdown arc; civilian "don't shoot" marker
   e.st > 1 && !e.de && arc(6, x, e.C, max(w, h) * .55 + 6, e.tt / d[4]);
   e.k == 'c' && ring(4, 0x50f2c4, 1, x, y - h - 14, 7);
   e.k == 'p' && circ(0xf8c20b, .45 + .3 * sin(tm * 9), e.ex = x - w * .2, e.ey = y - h * .8, h * .06 + 3);
 };
 
-// ---- bosses: texture, start y, name, weak points [x, y offsets in sprite sizes, hp, radius px]; tt = telegraph timer
-const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [[-.27, .3, 9, 30], [0, .38, 9, 30], [.27, .3, 9, 30]]], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]], ['boss', 470, 'PHELIOS', [[.1, -.58, 36, 100]]]];
+// ---- bosses, up to two at once (BB = [BS, B2]): kind 1 ship, 2 guardian, 3 Phaenon (final), 4 Phelios (second final boss, or the ally: b.al)
+// table: texture, start y, name, weak points [x, y offsets in sprite sizes, hp, radius px]; tt = telegraph timer
+const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [[-.27, .3, 9, 30], [0, .38, 9, 30], [.27, .3, 9, 30]]], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]],
+  ['trooper', 560, 'PHAENON', [[.09, -.86, 14, 36], [.2, -.57, 14, 36], [-.43, -.5, 12, 36]]], ['boss', 520, 'PHELIOS', [[.1, -.58, 30, 80]]]];
+// the hostile bosses on screen (dying ones too) / still fighting
+const hb = () => BB.filter(b => b.on && !b.al);
+const bos = () => hb().filter(b => !b.de);
 const bossStart = () => {
-  const b = BS, k = lvl, [tx, y, nm, w] = BT[k - 1];
-  OA(b, { on: 1, k, de: 0, fl: 0, t: 2.5, sh: 0, ci: 0, x: 400, y, v: k > 2 && M.boss == 'phaenon', tx });
-  b.mx = 0; b.w = w.map(([x, y, hp, r]) => (b.mx += hp, { x, y, hp, r }));
-  stx(b.s, b.tx).setOrigin(.5, k < 2 ? .5 : 1).setAlpha(1).visible = 1;
-  bossT.setText(b.v ? 'PHAENON' : nm);
+  // L3: M.ph 1 = Phelios fights at your side, 2 = Phelios is a second boss; VS: the second boss is P2's hologram hero
+  const k = lvl, ph = k > 2 && M.ph;
+  BB.map((b, i) => {
+    // VS: P2's boss is a giant hologram of the level's hero (kinds 5-7)
+    const q = i ? VS ? 4 + k : 4 : k, o = HE[k - 1][0], [tx, y, nm, w] = q > 4 ? [o, 290, up(o), [[0, -.1, 25 + k * 5, 70]]] : BT[q - 1];
+    OA(b, { on: !i || ph || VS, k: q, al: i && !VS && ph < 2, de: 0, fl: 0, t: 2.5, sh: 0, x: 400, y, vd: !i && k > 2 && M.ally != 'vidnah', mx: 0, c: 0 });
+    b.w = b.al ? [] : w.map(([x, y, hp, r]) => (b.mx += hp, { x, y, hp, r, m: hp }));
+    b.on && (stx(b.s, tx).setOrigin(.5, q < 2 || q > 4 ? .5 : 1).visible = 1);
+    i ? VS && bossT.setText(bossT.text + ' · ' + nm) : bossT.setText(ph > 1 ? 'PHAENON · PHELIOS' : nm);
+  });
   banner(R`¡ALERTA!`, bossT.text, PH[1]); au('boss'); mus(4);
   k < 2 && (bgSh.visible = 0);
+  // 2P: suggested roles
+  live()[1] && !VS && pop(400, 262, R`P1 DEFIENDE · P2 ATACA`, TEAL, 22, 3000);
 };
-const bossChk = () => {
-  const b = BS;
+const bossChk = b => {
   if (!b.de && b.w.every(w => w.hp <= 0)) {
-    b.de = 2.2; hs = .2; au('kill'); cam.shake(700, .02); mus(lvl);
-    live().map(p => p.sc += 3000);
+    b.de = 2.2; hs = .2; au('kill'); cam.shake(700, .02);
+    (VS ? [P[+(b.k > 4)]] : live()).map(p => p.sc += 3000);
     banner(R`¡JEFE DERROTADO!`, '+3000', YEL);
   }
 };
 // boss hit test around (x, y) with radius r: n damage, weak points take x wm
-const bossHit = (p, x, y, r, n, wm) => {
-  const b = BS, top = b.y - b.H * b.s.originY;
+const bossHit = (p, x, y, r, n, wm) => bos().filter(b => foe(p, b.k > 4)).some(b => {
+  const k = b.k, top = b.y - b.H * b.s.originY;
+  // Vidnah's hologram cannot be destroyed: a hit only staggers her (no healing for 4 s)
+  if (b.vd && hypot(x - VD.x, y - VD.y) < 60 + r) return b.vs > 1 || (b.vs = 4, pop(x, y - 40, R`¡INTERRUMPIDA!`, TEAL)), boom(6, x, y), 1;
   if (abs(x - b.x) > b.W * .45 + r || y < top - r || y > top + b.H + r) return;
   for (const w of b.w) if (w.hp > 0 && hypot(x - w.X, y - w.C) < w.r + r) {
-    if (b.k > 2 && (b.v ? b.sh : b.ci < 3)) return tm > wT && (wT = tm + 1.5, pop(x, y - 30, b.sh ? R`¡ESCUDO!` : R`¡SOLO EN VERDE!`, '#B98CFF')), 1;
+    // closed: the L2 eye between volleys, Phaenon's shield, Phelios unless green
+    if (k == 2 ? !(b.op > 0) : k == 3 ? b.sh : k > 3 && b.ci < 2) return tm > wT && (wT = tm + 1.5, pop(x, y - 30, k < 4 ? R`¡ESCUDO!` : R`¡SOLO EN VERDE!`, '#B98CFF')), 1;
     w.hp -= n * wm; b.fl = .05; boom(6, x, y); au('hit'); combo(p); p.sc += 30 * p.mu;
     w.hp > 0 || boom(40, x, y);
-    return bossChk(), 1;
+    return bossChk(b), 1;
   }
   return boom(2, x, y), 1;
-};
-const bossUp = dt => {
-  const b = BS, k = b.k;
+});
+const bossUp = (b, dt) => {
+  // shots per burst / volley are fewer solo; two bosses share the plateau (Phaenon left, Phelios right)
+  const k = b.k, n = live()[1] ? 5 : 3, w0 = b.w[0], two = hb()[1];
   if (b.de) {
     rand() < .35 && boom(14, b.x + rnd(-.4, .4) * b.W, b.y - (k < 2 ? rnd(-.4, .4) : rnd(.1, .9)) * b.H) && cam.shake(80, .01);
-    b.s.setAlpha(b.de / 2.2);
-    return (b.de -= dt) <= 0 && (off(b), nextStep());
+    // shrinking away (bossDraw); L3: thrown off the side of the platform, down into the clouds
+    k > 2 && (b.x += (b.x < 400 ? -360 : 360) * dt, b.y += (b.de > 1.6 ? -200 : 420) * dt);
+    // the fight ends when the last hostile boss is gone
+    return (b.de -= dt) <= 0 && (off(b), hb()[0] || (BB.map(off), E.map(off), mus(lvl), nextStep()));
   }
-  b.t -= dt * AG;
-  if (k < 3) b.x = 400 + sin(tm * .6) * 180, b.y += ((k < 2 ? 150 : 600) + sin(tm * 1.3) * 20 - b.y) * dt * 1.5;
-  // Phelios: skin colour = combat mode, vulnerable only in green; Phaenon: shield phases
-  else b.x = 400 + sin(tm * .8) * 210, b.v ? b.sh = tm % 7 < 4 : b.ci = (tm / 1.3 | 0) % 4;
-  // telegraph a weak point, then it fires
-  if (b.t <= 0) {
+  b.t -= dt * AG; b.op -= dt; b.vs -= dt;
+  // ship / guardian / Phaenon (shield phases): swaying, on the left when there are two bosses
+  if (k < 4) b.x = (two ? 260 : 400) + sin(tm * .7) * (two ? 110 : 190), k < 3 ? b.y += ((k < 2 ? 150 : 600) + sin(tm * 1.3) * 20 - b.y) * dt * 1.5 : b.sh = tm % 7 < 4;
+  // VS hologram
+  else if (k > 4) b.x = 560 + sin(tm * .7) * 110;
+  // Phelios at your side: his magenta beam bites Phaenon every 3 s
+  else if (b.al) b.x = 690 + sin(tm) * 20, b.t < 0 && (b.t = 3, (w => w && (fx(0xff4fd8, b.x, b.y - b.H * .6, w.X, w.C), w.hp -= 2, bossChk(BS)))(BS.w.find(w => w.hp > 0)));
+  // Phelios as a boss: skin colour = combat mode (violet blinks along the plateau, red fires the VOID CLAW volley, green is vulnerable)
+  else (b.ci = (tm / 1.7 | 0) % 3) || (b.x = 540 + 110 * sin((tm * 3 | 0) * 2.4));
+  // Vidnah heals Phaenon unless a hit staggered her (slower solo); as the ally she pulses SEÑAL to the players instead
+  b.vd ? b.vs > 0 || b.w.map(w => w.hp > 0 && (w.hp = min(w.m, w.hp + dt * n * .07))) : k == 3 && ((b.vh -= dt) > 0 || (b.vh = 7, vheal()));
+  // telegraph a weak point, then it fires; Phaenon: a fast burst of green shots every 1.2 s and artillery zones every third time;
+  // the L2 eye opens for 1.8 s after each volley (its damage window); Phelios fires in red
+  if (b.t <= 0 && !b.al && (k != 4 || b.ci == 1)) {
     const w = pick(b.w.filter(w => w.hp > 0));
-    b.t = k < 2 ? 1.8 : 1.6;
-    w && (w.tt = .9);
+    b.t = k < 2 ? 1.8 : k < 4 ? 1.2 : 2.6;
+    w && (w.tt = .75);
   }
-  b.w.map(w => w.tt > 0 && (w.tt -= dt) <= 0 && w.hp > 0 && shot((w.X - 400) / 175 + cx, 1 - (w.C - hy) / 103, 3.2, b.v ? 0x73d90d : 0xff3d6e));
+  b.w.map(w => w.tt > 0 && (w.tt -= dt) <= 0 && w.hp > 0 && (k == 2 && (b.op = 1.8), k == 3 && ++b.c % 3 < 1 && rp(n, () => shot(rnd(-.9, .9), 0, rnd(1.6, 3), 0xff3d3d, 2.4)),
+    rp(k < 2 || n, i => shot((w.X - 400) / 175 + cx + (i - 1) * .4, 1 - (w.C - hy) / 103, 3.2 + (k == 3) * i * .35, k == 3 ? 0x73ff8a : 0xff3d6e, 0, VS ? +(k > 4) : null))));
 };
-const bossDraw = dt => {
-  const b = BS, s = b.s, k = b.k;
-  pos(s, b.x, b.y, k < 2 ? 470 / s.frame.width : (k < 3 ? 440 : 330) / s.frame.height, 9);
+const bossDraw = (b, dt) => {
+  const s = b.s, k = b.k, w0 = b.w[0];
+  // VS hologram: the hero's HD portrait in cyan, softly pulsing
+  k > 4 && (s.alpha = .75 + .2 * sin(tm * 4));
+  pos(s, b.x, b.y, (k < 2 ? 470 / s.frame.width : (k < 3 ? 440 : b.al ? 200 : 300) / s.frame.height) * (b.de ? b.de / 2.2 : 1), 9);
   b.W = s.displayWidth; b.H = s.displayHeight;
-  tint(s, b.de > 0 || (b.fl -= dt) > 0, k > 2 && (b.v ? 0xe8e4ff : [0xff4fd8, 0x50f2c4, 0xf2e205, 0x73d90d][b.ci]));
-  for (const w of b.w) {
+  // Phaenon white-green; Phelios: combat colours, or magenta as the ally
+  tint(s, b.de > 0 || (b.fl -= dt) > 0, k > 2 && (k < 4 ? 0xd8ffe0 : k > 4 ? 0x80e8ff : b.al ? tm % 1 < .5 ? 0xff4fd8 : 0xff9ae8 : [0xb98cff, 0xff3d3d, 0x73d90d][b.ci]));
+  b.w.map(w => {
     w.X = b.x + w.x * b.W; w.C = b.y + w.y * b.H;
-    if (w.hp > 0 && !b.de) k < 3 && circ(k < 2 ? 0xff4fd8 : 0xf8c20b, .5 + .3 * sin(tm * 10), w.X, w.C, w.r * .8), w.tt > 0 && arc(6, w.X, w.C, 44, w.tt / .9);
-  }
+    w.hp > 0 && !b.de && ((k == 2 ? b.op > 0 : k < 2 || k > 4) && circ(k < 2 ? 0xff4fd8 : 0xf8c20b, .5 + .3 * sin(tm * 10), w.X, w.C, w.r * .8), w.tt > 0 && arc(6, w.X, w.C, 44, w.tt / .75));
+  });
   b.sh && ring(6, 0xb98cff, .9, b.x, b.y - b.H / 2, b.H * .62);
+  // Vidnah's hologram (her HD portrait, green aura) beside Phaenon, and her healing beam
+  if (b.vd && !b.de) {
+    const x = b.x + (b.x < 400 ? 210 : -210), y = 220;
+    VD.setPosition(x, y).alpha = b.vs > 0 ? .3 : .8;
+    circ(0x73d90d, .2, x, y, 90);
+    b.vs > 0 || line(4 + 3 * sin(tm * 20), 0x73d90d, .7, x, y, w0.X, w0.C);
+  }
 };
 
 // ---- players and weapons
-const addSc = (p, v, x, y, c = p.H) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), c); };
+const addSc = (p, v, x, y) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), p.H); };
 const combo = p => { const m = min(8, 1 + (++p.ch / 6 | 0)); m > p.mu && pop(p.x, p.y - 50, 'COMBO x' + (p.mu = m), YEL, 36); };
 // a hit lands on a random living player (or on player i when given)
-const hurt = i => {
+const hurt = (i, f) => {
   const p = i == null ? pick(live()) : P[i];
-  if (!p || p.hp <= 0 || p.inv > 0 && i == null) return;
+  if (!p || p.hp <= 0 || p.inv > 0 && !f) return;
   p.hp--; p.inv = 1.2; p.ch = 0; p.mu = 1; glt = .5;
   cam.shake(260, .016); hf = 1; au('hurt');
   pop(p.u, 505, R`-1 SEÑAL`, RED, 26);
+  // VS: a life lost, back at full SEÑAL; the third one ends the match
+  VS && !p.hp && (--p.lv ? (p.hp = p.mx, p.inv = 2.5, pop(p.u, 470, '-1 VIDA', RED)) : ending());
   live().length || (mode(CONT, 10), mus(null), au('lose'), ovSet(46, YEL, 290));
 };
 // join / continue (HotD style: score resets, the record is kept)
@@ -320,14 +367,16 @@ const strike = (p, x, y, r, n, all) => {
   for (const b of B) if (b.on && hypot(b.X - x, b.Y - y) < b.r * .6 + r + 12) { off(b); boom(10, b.X, b.Y); addSc(p, 50, b.X, b.Y); k = 1; if (!all) return; }
   for (const t of E.filter(e => e.on && !e.de && !e.dk && abs(x - e.X) < e.W * .42 + r && y < e.Y + r && y > e.Y - e.H - r).sort((a, b) => a.z - b.z)) {
     k = 1;
-    if (t.k == 'c') t.de = .3, au('civ'), pop(t.X, t.Y - t.H, R`¡CIVIL! -1 SEÑAL`, RED), hurt(p.i);
+    if (t.k == 'c') t.de = .3, au('civ'), pop(t.X, t.Y - t.H, R`¡CIVIL! -1 SEÑAL`, RED), hurt(p.i, 1);
+    // VS: hitting your own side costs points
+    else if (!foe(p, t.k == 'm')) t.de = .3, au('civ'), p.sc = max(0, p.sc - 300), pop(t.X, t.Y - t.H, R`¡ALIADO! -300`, RED);
     else {
       t.fl = .07; boom(5, t.X, t.C); combo(p);
       (t.hp -= (n || (t.z < 2.6 ? 1 : .5)) * (t.k == 'p' && hypot(x - t.ex, y - t.ey) < t.H * .12 + 8 + r ? 3 : 1)) > 0 ? au('hit') : kill(t, p);
     }
     if (!all) return;
   }
-  BS.on && !BS.de && bossHit(p, x, y, r, n || .5, p.h > 1 ? 2 : 1) || k || (p.ch = 0, p.mu = 1, boom(2, x, y));
+  bossHit(p, x, y, r, n || .5, p.h > 1 ? 2 : 1) || k || (p.ch = 0, p.mu = 1, boom(2, x, y));
 };
 // KEEPER X9 launches a tracking missile, SIC KLE-A fires a fast burst, RAILGUN SR pierces with a beam from below
 const fire = p => {
@@ -351,11 +400,12 @@ const bomb = p => {
   odT = f ? 6 : 1.5; au('bomb'); cam.shake(500, .02); flash(300); fx(0xf8c20b, 400, 300, 650);
   banner('QAWAKUN OVERDRIVE', f ? R`SEÑAL HD RESTAURADA` : 'POTENCIA -75%', GOLD);
   B.map(off);
-  foes().map(e => (f || --e.hp <= 0) && kill(e, p));
-  if (BS.on && !BS.de) { let n = BS.mx / (f ? 4 : 16) | 0; for (const w of BS.w) { const m = min(max(w.hp, 0), n); w.hp -= m; n -= m; } bossChk(); }
+  foes().map(e => foe(p, e.k == 'm') && (f || --e.hp <= 0) && kill(e, p));
+  bos().filter(b => foe(p, b.k > 4)).map(b => { let n = b.mx / (f ? 4 : 16) | 0; for (const w of b.w) { const m = min(max(w.hp, 0), n); w.hp -= m; n -= m; } bossChk(b); });
 };
 // lockable targets left to right: visible enemies and the boss's weak points
-const tgs = () => [...foes().filter(e => e.st), ...BS.on && !BS.de ? BS.w.filter(w => w.hp > 0) : []].sort((a, b) => a.X - b.X);
+// the boss is up and not dying
+const tgs = () => [...foes().filter(e => e.st), ...bos().flatMap(b => b.w.filter(w => w.hp > 0))].sort((a, b) => a.X - b.X);
 const ctrl = (p, dt) => {
   const k = p.K, ix = btn(k[3]) - btn(k[2]), iy = btn(k[1]) - btn(k[0]), H = HE[p.h];
   p.inv -= dt; p.cd -= dt; p.hx = max(0, p.hx - dt * .5);
@@ -371,7 +421,7 @@ const ctrl = (p, dt) => {
   L && (p.lk = L.length && (p.lk ? L[(L.indexOf(p.lk) + 1) % L.length] : L.reduce((a, b) => d(a) < d(b) ? a : b))) && au('beep');
   // otherwise a light aim assist pulls toward the nearest enemy within ~46px
   let t = p.lk, bd = 46;
-  if (!t) for (const e of foes()) e.st && d(e) < bd && (bd = d(e), t = e);
+  if (!t) for (const e of foes()) e.st && foe(p, e.k == 'm') && d(e) < bd && (bd = d(e), t = e);
   if (t) { const f = min(1, dt * (p.lk ? 12 : p.a > .4 ? 1.5 : 6)); p.x += (t.X - p.x) * f; p.y += (t.C - p.y) * f; }
   (hit(k[4]) | btn(k[4])) && p.cd <= 0 && fire(p);
   hit(k[5]) && p.am < H[8] && p.rl <= 0 && (p.rl = H[9], au('reload'));
@@ -380,55 +430,59 @@ const ctrl = (p, dt) => {
 
 // ---- flow
 const upMods = () => {
-  M = OA({}, sto('mods', {}, run, lvl));
+  M = VS ? {} : OA({}, sto('mods', {}, run, lvl));
   AG = M.hard = cl(+M.hard || 1, .6, 1.6); M.m = M.route == 'metro';
   const mx = M.extra ? 6 : 5;
   P.map(p => p.mx != mx && (p.hp > 0 && (p.hp = cl(p.hp + mx - p.mx, 1, mx)), p.mx = mx));
 };
 // START -> hero select (each player: joystick + B1; P2 cannot take P1's hero) -> intro -> level 1
 const startGame = n => {
-  mode(SEL, 20); nE = -1; vis(TI, 0); vis(SW, 1);
+  VS = 0; mode(SEL, 20); nE = -1; vis(TI, 0); vis(SW, 1);
   P.map(p => (p.on = p.i < n, p.ok = !p.on));
 };
 const selUp = () => {
-  each((p, k) => (p.h = cyc(k, 2, 3, p.h, 3), (hit(k[4]) || mt < 0) && (P.some(o => o != p && o.on && o.ok && o.h == p.h) ? mt < 0 ? p.h = (p.h + 1) % 3 : au('empty') : (p.ok = 1, au('reload')))));
+  // 2P: B3 toggles CO-OP / VS
+  P[1].on && ah(6) && (VS ^= 1, au('beep'));
+  each((p, k) => (p.h = cyc(k, 2, 3, p.h, 3), (hit(k[4]) || mt < 0) && (!VS && P.some(o => o != p && o.on && o.ok && o.h == p.h) ? mt < 0 ? p.h = (p.h + 1) % 3 : au('empty') : (p.ok = 1, au('reload')))));
   // cursors: P1 / P2 frames around the hovered hero, thicker once confirmed
   G = hg;
-  for (const p of P) { const o = p.i * 6; p.on && sr(p.ok ? 8 : 4, p.C, 70 + p.h * 260 + o, 86 + o, 140 - o * 2, 168 - o * 2); }
+  P.map(p => { const o = p.i * 6; p.on && sr(p.ok ? 8 : 4, p.C, 70 + p.h * 260 + o, 86 + o, 140 - o * 2, 168 - o * 2); });
   const J = P.filter(p => p.on);
-  sD.setText(J.map(p => R`${p.n} ${up(HE[p.h][0])}${p.ok ? ' ✔' : ''} · ${HE[p.h][3]}`).join('\n'));
+  sD.setText((J[1] ? R`B3 · ${VS ? 'VS: HUMANOS vs PRIMEROS' : 'CO-OP'}
+` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${VS && p.i ? AL[p.h][1] : HE[p.h][3]}`).join('\n'));
   const n = P[1].on + 1;
   if (P.every(p => p.ok)) {
     vis(SW, 0);
     run = sto('newRun', {}, world, n, J.map(p => HE[p.h][0]));
-    P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
+    P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, p.lv = 3, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
     lvl = 1; au('start');
-    dialog(beat('intro'), 'intro', () => startLevel(1));
+    VS ? startLevel(1) : dialog(beat('intro'), 'intro', () => startLevel(1));
   }
 };
 const setBg = () => {
-  const b3 = lvl > 2 && T.exists('bg3');
-  stx(bg, b3 ? 'bg3' : 'av').setOrigin(.5, b3 ? .5 : 1).setTint(b3 ? 0xa0a0b0 : 0xffffff);
+  // L3: the painted Roraima summit, full screen; otherwise El Ávila on the horizon
+  stx(bg, lvl > 2 ? 'bg3' : 'av').setOrigin(.5, lvl > 2 ? .5 : 1);
   bg.visible = bgSh.visible = lvl != 2;
 };
+// a player's hero or (VS, P2) Primero: name, weapon
+const hn = p => VS && p.i ? AL[p.h] : HE[p.h];
 const startLevel = n => {
   const L = LV[n - 1];
   let a = M.ally;
-  lvl = n; steps = L[2].split(' '); si = -1; cz = 0; upMods(); setBg();
-  // mission card + first-seconds controls hint
-  banner(R`MISIÓN ${n} · ${L[0]}`, L[1], PH[0]); mus(n); md = PLAY; snT = 6; suT = 4;
-  n < 2 && pop(400, 505, R`B1 DISPARA · B2 RECARGA · B4 FIJA`, WH, 20, 5000);
+  lvl = n; NW = n > 2 ? .6 : 1; steps = L[2].split(' '); si = -1; cz = 0; upMods(); setBg();
+  // mission card
+  banner(VS ? 'RESISTENCIA vs PRIMEROS' : R`MISIÓN ${n} · ${L[0]}`, L[1], PH[0]); mus(n); md = PLAY; snT = 6; suT = 4;
   (a = a || M.sniper && 'lukxed') && pop(400, 300, up(a) + ' TE CUBRE', WC[a]);
   nextStep();
 };
 const nextStep = () => {
   const s = steps[++si];
-  if (!s) return lvl < 3 ? startLevel(lvl + 1) : dialog(beat('end'), 'end', ending);
+  if (!s) return lvl < 3 ? startLevel(lvl + 1) : VS ? ending() : dialog(beat('end'), 'end', ending);
   const a = s.slice(1);
   stp = s[0]; sT = 0;
   if (stp == 'M') mv = +a;
   else if (stp == 'W') wq = a.split('|'), wg = wi = gT = 0, wt = .4;
-  else if (stp == 'B') dialog(beat(a), a, nextStep);
+  else if (stp == 'B') VS ? nextStep() : dialog(beat(a), a, nextStep);
   else bossStart();
 };
 const waveUp = dt => {
@@ -437,9 +491,8 @@ const waveUp = dt => {
   else if (!foes().length) {
     // checkpoint: Vidnah (if she defected) restores +1 SEÑAL
     const v = M.ally == 'vidnah';
-    live().map(p => (p.sc += 500, v && p.hp < p.mx && p.hp++));
-    v && au('heal');
-    pop(400, 200, v ? R`VIDNAH: +1 SEÑAL` : R`¡ZONA LIMPIA! +500`, TEAL, 30);
+    live().map(p => p.sc += 500);
+    v ? vheal() : pop(400, 200, R`¡ZONA LIMPIA! +500`, TEAL, 30);
     nextStep();
   }
 };
@@ -448,9 +501,10 @@ const playUp = dt => {
   if (hs > 0) return hs -= dt;
   odT -= dt; sT += dt;
   live().map(p => ctrl(p, dt));
-  stp == 'M' ? sT > mv && nextStep() : stp == 'W' ? waveUp(dt) : stp == 'X' && BS.on && bossUp(dt);
+  stp == 'M' ? sT > mv && nextStep() : stp == 'W' ? waveUp(dt) : stp == 'X' && BB.map(b => b.on && bossUp(b, dt));
   E.map(e => e.on && eUp(e, dt));
-  B.map(b => b.on && (b.z -= b.v * dt, b.x -= b.x * dt * .6, b.h += (.85 - b.h) * dt * 1.5, b.z < .7 && (off(b), hurt())));
+  // shots that reach the camera hurt; artillery zones blow up when their timer ends
+  B.map(b => b.on && (b.g ? (b.g -= dt) < 0 && (off(b), boom(30, b.X, b.Y), hurt(b.T)) : (b.z -= b.v * dt, b.x -= b.x * dt * .6, b.h += (.85 - b.h) * dt * 1.5, b.z < .7 && (off(b), hurt(b.T)))));
   // Keeper missiles arc to the aimed point (or home on the locked target) and explode in an area
   MS = MS.filter(m => {
     const l = m.l, k = ok(l), x = k ? l.X : m.x, y = k ? l.C : m.y;
@@ -469,7 +523,7 @@ const dlgOff = () => { DL = 0; vis([dN, dT, ...dC], 0); porVis(dPor, 0); };
 const dialog = (d, id, cb, re) => {
   const ls = arr(d && d.lines).filter(l => l && l.text), ch = re ? [] : arr(d && d.choices).slice(0, 3);
   if (!(ls.length + ch.length)) return dlgOff(), md = PLAY, cb();
-  DL = { ls, ch, id, cb, i: -1, n: 0, c: [0, 0], v: [-1, -1], t: 0 };
+  DL = { ls, ch, id, cb, i: -1, n: 0, c: 0, t: 0 };
   mode(DLG, mt); vis([dN, dT], 1); nextLine();
 };
 const nextLine = () => {
@@ -477,14 +531,15 @@ const nextLine = () => {
   if (l) {
     const k = T.exists(l.who) && l.who;
     D.n = D.w = 0;
-    dN.setText(up(l.name || '').slice(0, 14)).setColor(WC[k] || (k ? GOLD : RED));
-    D.s = dT.setText('').getWrappedText('' + l.text).join('\n');
+    dN.setText(up(l.name || '')).setColor(WC[k] || (k ? GOLD : RED));
+    D.s = dT.setText('').getWrappedText(l.text).join('\n');
     porVis(dPor, !!k);
     k && k != D.k && porSet(dPor, k);
     D.k = k;
   } else if (D.ch.length && !D.vo) {
     D.vo = 1;
-    dT.setText(D.s + '\n▲▼ + B1' + (P[1].on ? ': VOTEN' : ''));
+    dT.setText(D.s + R`
+▲▼ + B1`);
     D.ch.map((c, j) => dC[j].setText(up(c)).visible = 1);
   } else dlgOff(), md = PLAY, D.cb();
 };
@@ -497,38 +552,28 @@ const dlgUp = dt => {
     ah(4) | ah(5) ? D.n < L ? D.n = L : nextLine() : D.w > 7 && nextLine();
     return (D.n | 0) != n0 && dT.setText(D.s.slice(0, D.n | 0)) && (n0 % 3 || au('talk'));
   }
-  D.t += dt;
-  for (const p of P) if (p.on && D.v[p.i] < 0) {
-    const k = p.K;
-    D.c[p.i] = cyc(k, 0, 1, D.c[p.i], n);
-    // a B1 double-tap on the last line must not lock a vote before the choices are seen
-    (hit(k[4]) && D.t > .4 || D.t > 15) && (D.v[p.i] = D.c[p.i], au('reload'));
-  }
-  if (P.every(p => !p.on || D.v[p.i] >= 0)) {
-    // both vote in 2P; on disagreement P1 wins and agree=false
-    const [a, b] = D.v, ag = a < 0 || b < 0 || a == b;
-    ag || pop(400, 150, 'VOTO DIVIDIDO: GANA P1', YEL, 26);
-    const r = sto('choose', null, run, D.id, a < 0 ? b : a, ag);
-    upMods(); vis(dC, 0);
-    dialog(r, D.id, D.cb, 1);
-  }
+  // P1 picks (a B1 double-tap on the last line must not pick before the choices are seen)
+  const k = P[0].K;
+  D.t += dt; D.c = cyc(k, 0, 1, D.c, n);
+  (hit(k[4]) && D.t > .4 || D.t > 15) && (au('reload'), dialog((D.r = sto('choose', null, run, D.id, D.c), upMods(), vis(dC, 0), D.r), D.id, D.cb, 1));
 };
 const dlgDraw = dt => {
-  const D = DL, c = parseInt(dN.style.color.slice(1), 16), n = D.ch.length, y0 = 384 - n * 52;
+  const D = DL, c = +('0x' + dN.style.color.slice(1)), n = D.ch.length, y0 = 384 - n * 52;
   G = dG; box(c, 14, 398, 772, 194);
   sr(2, c, 26, 410, 140, 168);
   if (D.k) { const y = porUp(dPor, dt * 2.2); dPor.p < 1 && rect(0xf8c20b, 1, 24, y - 2, 144, 4); }
   D.vo && box(0xf8c20b, 130, y0, 540, n * 52 + 12) && rp(n, j => {
     const y = y0 + 32 + j * 52;
     dC[j].setY(y);
-    // vote cursors: P1 ▶ on the left, P2 ◀ on the right; white once locked
-    for (const p of P) if (p.on && D.c[p.i] == j) { const x = p.i ? 640 : 160; G.fillStyle(D.v[p.i] < 0 ? p.C : 0xffffff).fillTriangle(x, y - 12, x, y + 12, x + (p.i ? -18 : 18), y); }
+    // P1's cursor
+    D.c == j && G.fillStyle(0xd9f21b).fillTriangle(160, y - 12, 160, y + 12, 178, y);
   });
 };
 
 // ---- ending, names, leaderboard, title
 const ending = () => {
-  const e = sto('ending', {}, run);
+  // VS: the other side wins when someone ran out of lives, else the higher score
+  const e = VS ? { title: P[0].lv < 1 || P[1].lv && P[1].sc > P[0].sc ? 'GANAN LOS PRIMEROS' : 'GANA LA RESISTENCIA', lines: ['RESISTENCIA ' + pad(P[0].sc), 'PRIMEROS ' + pad(P[1].sc)] } : sto('ending', {}, run);
   mode(END, 30); mus(null); au('win'); flash(900);
   oT.setText(up(e.title || 'FIN'));
   ovSet(21, WH, 340, arr(e.lines).join('\n\n'));
@@ -549,28 +594,35 @@ const nameUp = () => {
   vis(nL, 0);
   for (const p of P) if (p.pl) { p.nn = p.nm.map(ab).join(''); p.sc = fsc(p); scores.push({ n: p.nn, s: p.sc }); if (!b || p.sc > b.sc) b = p; }
   scores = valid(scores);
-  store.set('qn-scores', scores);
+  store.set(KS, scores);
   nE = scores.findIndex(e => e.n == b.nn && e.s == b.sc);
   world = sto('commit', world, world, run, b.nn, b.sc);
-  store.set('qn-world', world);
+  store.set(KW, world);
   toTitle();
 };
-const valid = v => arr(v).filter(e => e && /^\w+$/.test(e.n) && e.s >= 0)
-  .map(e => ({ n: e.n.slice(0, 3), s: min(e.s, 9999999) | 0 })).sort((a, b) => b.s - a.s).slice(0, 5);
+// stored scores: 3-letter names and non-negative scores only, best 5
+const valid = v => arr(v).filter(e => /^\w{3}$/.test(e && e.n) && e.s >= 0).sort((a, b) => b.s - a.s).slice(0, 5);
 const toTitle = () => {
-  mode(TITLE, 0); lr = odT = DL = 0; off(BS); vis(nL, 0);
+  mode(TITLE, 0); lr = odT = DL = 0; BB.map(off); vis(nL, 0);
   [...E, ...B].map(off);
   P.map(p => p.on = p.pl = 0);
   lvl = 1; setBg(); retex(); mus(0); vis(TI, 1); porSet(tP, 'fornax');
+};
+// boot splash: "PLATANUS HACK 26, CARACAS · presenta"; fades in and out over 3.4 s, START or B1 skips
+const splUp = () => {
+  const a = min(1, (3.4 - mt) * 2, mt * 2);
+  G = hg; rect(0, 1, 0, 0, 800, 600);
+  vis(sp, 1); sp.map(t => t.alpha = a);
+  (mt < 0 || ah(4) | ah(7)) && (vis(sp, 0), toTitle());
 };
 const titleUp = dt => {
   const y = porUp(tP, dt * .5), n = tP.p * 10 | 0;
   tP.p < 1 || (tP.t += dt) < 2.5 || porSet(tP, 'fornax');
   tBar.setText(R`QAWAKUN RECONSTRUYENDO SEÑAL
-` + '▓'.repeat(n) + '░'.repeat(10 - n) + R` ${n * 10}%
+` + R`▓`.repeat(n) + R`░`.repeat(10 - n) + R` ${n * 10}%
 B6 · ` + iaT());
-  tPress.setAlpha(tm % 1 < .65 ? 1 : .2);
-  tB.setText('TOP 5\n\n' + [0, 1, 2, 3, 4].map(i => { const e = scores[i]; return (i == nE ? '► ' : '') + `${i + 1}. ${e ? e.n + '   ' + pad(e.s) : '---   -------'}`; }).join('\n'));
+  tPress.alpha = tm % 1 < .65 ? 1 : .2;
+  tB.setText('TOP 5\n\n' + [0, 1, 2, 3, 4].map((i, _, a, e = scores[i]) => (i == nE ? R`► ` : '') + `${i + 1}. ${e ? e.n + '   ' + pad(e.s) : '---   -------'}`).join('\n'));
   G = hg; box(0xff4fd8, 466, 222, 298, 240);
   sr(3, 0x50f2c4, 66, 228, 188, 224);
   tP.p < 1 && rect(0xffffff, 1, 60, y - 1, 200, 3);
@@ -588,26 +640,29 @@ const draw = dt => {
     const a = (q > 3 ? 0 : q > 2 ? 1 : 3) + glt * 10 | 0;
     pix.active = a > 0; pix.amount = a;
   }
-  // backdrop: El Ávila closing the avenue, or the Roraima art with a slow push-in, pan and bob while walking
-  const b3 = bg.originY < 1;
-  pos(bg, 400 - cx * 30, b3 ? 300 + sin(rt * 6) * 3 : hy, b3 ? 800 / bg.frame.width * (1.1 + .04 * sin(rt * .2)) : 1);
+  // backdrop: El Ávila closing the avenue, or the Roraima painting with a slow push-in, pan and bob while walking
+  const b3 = lvl > 2;
+  pos(bg, 400 - cx * 30, b3 ? 240 + sin(rt * 6) * 3 : hy, b3 ? 800 / bg.frame.width * (1.25 + cz * .003) : 1);
   pos(bgSh, 400 + sin(tm * .08) * 160, 66 + sin(tm * .7) * 8, 300 / bgSh.frame.width);
   scene();
-  // the mothership and its shield "against everything"
+  // the mothership, its shield "against everything" and its glow
   const x = bgSh.x, y = bgSh.y, sh = sin(tm * 3);
-  bgSh.visible && G.lineStyle(2, 0xb98cff, .35 + .25 * sh).strokeEllipse(x, y, 370 + 8 * sh, 150 + 4 * sh);
+  bgSh.visible && G.lineStyle(2, 0xb98cff, .35 + .25 * sh).strokeEllipse(x, y, 370 + 8 * sh, 150 + 4 * sh) && circ(0xf4e4ff, .1, x, y, 160);
   G = fg.clear();
-  E.map(e => e.on && eDraw(e, dt));
+  for (const e of E) e.on && eDraw(e, dt);
   for (const b of B) if (b.on) {
     const r = b.r = 75 / b.z;
     pos(b.s, b.X = PX(b.x, b.z), b.Y = PY(b.h, b.z), r / 8 * (1 + .2 * sin(tm * 40)), 41 - b.z);
     circ(0xffffff, .9, b.X, b.Y, r * .3);
+    // an artillery zone: its countdown circle
+    b.g && arc(5, b.X, b.Y, r * 1.8, b.g / 2.4);
   }
-  BS.on && bossDraw(dt);
+  VD.visible = BS.on && BS.vd && !BS.de;
+  BB.map(b => b.on && bossDraw(b, dt));
   MS.map(m => m.X && circ(0xfff0c0, 1, m.X, m.Y, 7));
   // beams, tracers, blasts and shockwaves
   FX = FX.filter(f => (f.t -= dt) > 0);
-  for (const f of FX) { const a = f.t / .35; f.Y ? line(10 * a + 2, f.c, a, f.x, f.y, f.X, f.Y) : ring(14 * a + 2, f.c, a, f.x, f.y, f.X * (1.2 - a)); }
+  FX.map(f => { const a = f.t / .35; f.Y ? line(10 * a + 2, f.c, a, f.x, f.y, f.X, f.Y) : ring(14 * a + 2, f.c, a, f.x, f.y, f.X * (1.2 - a)); });
 };
 const hud = dt => {
   const on = md == PLAY || md == CONT;
@@ -615,7 +670,7 @@ const hud = dt => {
   // hit: a red edge frame for ~250 ms (a full-screen flash hid the action)
   hf > 0 && sr(60, 0xff2040, 0, 0, 800, 600, hf * .5);
   hf -= dt * 4;
-  md > PLAY && rect(0x05020d, md == DLG ? .3 : .75, 0, 0, 800, 600);
+  md > PLAY && md < SPL && rect(0x05020d, md == DLG ? .3 : .75, 0, 0, 800, 600);
   ov.visible = md > DLG && md < SEL; oT.visible = md == END; eH.visible = md == END && mt < 28 && tm % 1 < .6;
   md == CONT && ov.setText(R`¿CONTINUAR?
 ${max(0, ceil(mt) - 1)}
@@ -634,7 +689,7 @@ RÉCORD ${pad(max(...P.map(fsc)))}`);
       t && sr(3, c, t.X - s, t.C - s, s * 2, s * 2) && pos(p.L, t.X, t.C - s - 12);
     }
     p.T.setText(`${p.n} ${!al ? p.on ? R`SIN SEÑAL · START` : PS : pad(p.sc) + (p.mu > 1 ? ' x' + p.mu : '')}`).setAlpha(al || tm % 1 < .6 ? 1 : .3).visible = on;
-    p.N.setText(up(H[0]) + ' · ' + H[1]).visible = on && p.on;
+    p.N.setText(up(hn(p)[0]) + ' · ' + hn(p)[1]).visible = on && p.on;
     if (!on) continue;
     box(c, x0, 528, 322, 66);
     // SEÑAL bars, ammo, Overdrive charges
@@ -642,10 +697,14 @@ RÉCORD ${pad(max(...P.map(fsc)))}`);
       j < p.mx && rect(j < p.hp ? p.hp > 3 ? 0xd9f21b : p.hp > 1 ? 0xf2e205 : 0xff3d5a : 0x2a1f40, 1, x0 + 14 + j * 24, 573, 20, 14);
       j < n && rect(j < am ? lc(0xf2e205, 0xff3d5a, min(1, p.hx)) : 0x2a1f40, 1, x0 + 168 + j * 84 / n, 566, 84 / n - 2, 21);
       j < 2 && circ(j < p.bo ? 0xf8c20b : 0x2a1f40, p.bc > 0 ? .3 : 1, x0 + 274 + j * 22, 576, 8);
+      // VS lives
+      VS && j < 3 && circ(j < p.lv ? 0xff5a5a : 0x2a1f40, 1, x0 + 262 + j * 18, 545, 6);
       !j && p.bc > 0 && p.bo && arc(3, x0 + 252 + p.bo * 22, 576, 11, 1 - p.bc / 25, 0xf8c20b);
     });
   }
-  (bossT.visible = BS.on && !BS.de && on) && rect(0x0d0620, .85, 196, 36, 408, 20) && rect(0xff4fd8, 1, 200, 40, BS.w.reduce((a, w) => a + max(0, w.hp), 0) * 400 / BS.mx, 12);
+  // one bar for all the hostile bosses
+  const H2 = hb(), bh = f => H2.reduce((a, b) => a + f(b), 0);
+  (bossT.visible = bos()[0] && on) && rect(0x0d0620, .85, 196, 36, 408, 20) && rect(0xff4fd8, 1, 200, 40, bh(b => b.w.reduce((a, w) => a + max(0, w.hp), 0)) * 400 / bh(b => b.mx), 12);
   md == DLG && dlgDraw(dt);
 };
 
@@ -682,7 +741,9 @@ const create = function () {
   if (S.renderer.type == 2) { const fx = cam.postFX; pix = fx.addPixelate(0); fx.addVignette(.5, .5, .95, .3); }
   bg = w(img()); bgSh = stx(w(img()), 'ship').setTint(0xa898e0);
   gg = w(S.add.graphics());
-  BS.s = w(img());
+  BS.s = w(img()); B2.s = w(img());
+  // sized by retex() (toTitle)
+  VD = OA(stx(w(img()), 'vidnah').setTint(0x9cffb0), { dw: 110, dh: 132 });
   rp(48, i => (i < 24 ? E : i < 40 ? B : PR).push({ s: w(i < 24 || i > 39 ? img().setOrigin(.5, 1) : img().setBlendMode(1)) }));
   fg = w(S.add.graphics().setDepth(50));
   em = w(S.add.particles(0, 0, 'p', { speed: { min: 60, max: 420 }, lifespan: 450, scale: { start: 1, end: 0 }, blendMode: 1, tint: [0xffffff, 0xf2e205, 0x50f2c4, 0xff4fd8], emitting: 0 }).setDepth(60));
@@ -695,7 +756,7 @@ const create = function () {
   TI = [tP.l, tP.h, tBar, tB, tPress, tx(400, 80, 92, PH[0], 'ARRIVALS').setShadow(0, 0, PH[1], 22, 1, 1), tx(400, 152, 46, GOLD, R`LA INVASIÓN`).setShadow(0, 0, GOLD, 14, 0, 1),
     tx(400, 578, 14, WH, R`START1 · 1 JUGADOR  START2 · 2 JUGADORES`)];
   // hero select: portraits, names, weapons, stat labels, per-player style line and the controls legend
-  SW = [tx(400, 36, 34, GOLD, R`ELIGE TU HÉROE`), sD = tx(400, 452, 15, WH),
+  SW = [tx(400, 36, 34, GOLD, R`ELIGE TU HÉROE`), sD = tx(400, 452, 15),
     tx(400, 545, 14, TEAL, R`B1 DISPARAR · B2 RECARGAR · B3 QAWAKUN OVERDRIVE
 B4 FIJAR OBJETIVO · B6 IA GRÁFICA ON/OFF · JOYSTICK APUNTAR`)];
   HE.map((h, j) => {
@@ -703,7 +764,7 @@ B4 FIJAR OBJETIVO · B6 IA GRÁFICA ON/OFF · JOYSTICK APUNTAR`)];
     const x = 140 + j * 260, o = OA(pos(stx(u(img()), h[0]), x, 170), { dw: 120, dh: 144 });
     SW.push(o, tx(x, 330, 15, WC[h[0]], R`${up(h[0])}
 ${h[1]} · ${h[2]}
-` + [R`DAÑO`, 'CADENCIA', 'ALCANCE'].map((s, i) => '■■■■■□□□□□'.substr(5 - h[4 + i], 5) + ' ' + s).join('\n')));
+DAÑO ${h[4]} · CAD ${h[5]} · ALC ${h[6]}`));
   });
   // HUD
   P.map(p => (p.T = tx(p.u - 147, 548, 24, p.H, '', 0), p.N = tx(p.u - 147, 516, 13, p.H, '', 0), p.L = tx(0, 0, 12, p.H, 'FIJADO')));
@@ -717,14 +778,16 @@ ${h[1]} · ${h[2]}
   // overlays
   ov = tx(400, 300, 20).setWordWrapWidth(700);
   oT = tx(400, 120, 50, GOLD).setWordWrapWidth(760);
-  eH = tx(400, 565, 20, YEL, '▶ B1 CONTINUAR');
+  eH = tx(400, 565, 20, YEL, R`▶ B1 CONTINUAR`);
   nL = P.map(p => tx(0, 300, 44, p.H));
-  rp(16, () => PO.push(tx(0, 0, 22).setAlpha(0)));
+  // popup texts (empty until pop() uses them)
+  rp(16, () => PO.push(tx(0, 0, 22)));
   dlgOff(); vis(SW, 0);
   safe(() => AU.init(S.sound.context));
-  store.get('qn-scores').then(r => scores = valid(r && r.value));
-  store.get('qn-world').then(r => r && r.found && (world = r.value));
-  toTitle();
+  store.get(KS).then(r => scores = valid(r && r.value));
+  store.get(KW).then(r => r && r.found && (world = r.value));
+  sp = [tx(400, 281, 26, WH, 'PLATANUS HACK 26, CARACAS'), tx(400, 334, 22, WH, 'presenta')];
+  toTitle(); vis(TI, 0); mode(SPL, 3.4);
 };
 const update = function (t, d) {
   const dt = min(d, 50) / 1000, v = md == PLAY ? (stp == 'M') * 1.8 : md == DLG ? spd : 1;
@@ -736,7 +799,7 @@ const update = function (t, d) {
   hg.clear(); dG.clear();
   // B6 (either player): neural upscaler ON/OFF at any time
   ah(9) && (ia ^= 1, retex(), pop(400, 300, iaT(), GOLD, 30));
-  md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && names()
+  md == SPL ? splUp() : md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && names()
     : md == CONT && (P.map(p => hit(p.K[7]) && (revive(p), md = PLAY, mus(BS.on ? 4 : lvl))), mt < 0 && md == CONT && (banner('GAME OVER', '', PH[1]), names()));
   draw(dt);
   hud(dt);
