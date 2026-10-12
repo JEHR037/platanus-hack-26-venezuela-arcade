@@ -54,9 +54,9 @@ const mode = (m, t) => (md = m, mt = t, clearHits());
 const kill = (e, p, s) => {
   e.de = .22; hs = .04; au('kill');
   boom(20, e.X, e.C);
-  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen))
+  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen)), in gold when x1.5 or better
   const f = 2 / (1 + log(1 + tm - e.b));
-  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H);
+  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H, f < 1.5 ? p.H : GOLD);
   s && pop(e.X, e.Y - e.H - 20, up(s), WC[s]);
 };
 const { hypot, exp, ceil, log } = Math;
@@ -98,7 +98,7 @@ CUENTA REGRESIVA 96%`, 'M2 Wtc|vpt|cvt M3 Bl2a M2 Wxr|qcx|pvp M4 Wdcd|xrx M3 X B
 let AG, ia = 1;
 let NW = 1, spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
 let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX, VD;
-let sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
+let AP, sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
 const KS = 'qn-scores', KW = 'qn-world', E = [], PO = [], PR = [], MG = new Set, VE = [0xffcc00, 0x00247d, 0xcf142b];
 
 // ---- more small helpers
@@ -145,9 +145,11 @@ const scene = () => {
   const l = lvl, m = l == 2;
   G = gg.clear();
   // ground: avenue + sidewalks / metro: light concrete platform with its yellow safety line, the (black) track pit with two steel rails
-  // on dark-blue supports, the ceiling with two long fluorescent strips (Roraima: the painted bg3 is the ground)
+  // on dark-blue supports, the ceiling with two long fluorescent strips / Roraima (the painted bg3 is the ground): soft
+  // cloud wisps drifting outwards below the platform on both sides, with the camera pan and bob
   if (l < 2) fq(0x48424f, -2.6, 2.6), fq(0x24212b, -1.7, 1.7);
   else if (m) fq(0x1d3a8c, 1.95, 2.95, -.49), rp(2, i => fq(0xc8c8d0, 2.16 + i * .6, 2.24 + i * .6, -.47)), fq(0x9c968a, -2.2, 1.3), fq(0xf2c200, 1.02, 1.3), fq(0x1c1a22, -2.2, 4, 2.8), rp(2, i => fq(0xe8eeff, i * 1.7 - 1.3, i * 1.7 - 1.18, 2.78));
+  else rp(6, i => G.fillStyle(0xfff0f4, .3).fillEllipse(400 - cx * 60 + (i % 2 * 2 - 1) * (250 + (tm * (9 + i * 2) + i * 70) % 220), hy + 175 + i * 18, 240, 26));
   for (let j = 13; j >= 0; j--) {
     const n = (cz / 3 | 0) + j, Z = n * 3 - cz, z0 = max(.4, Z), z1 = Z + 3, a = cl(1.7 - z0 / 15, 0, 1), sl = n % 2 * 2 - 1, X = sl * 1.85;
     if (z1 < .5) continue;
@@ -247,7 +249,7 @@ const eDraw = (e, dt) => {
 
 // ---- bosses, up to two at once (BB = [BS, B2]): kind 1 ship, 2 guardian, 3 Phaenon (final), 4 Phelios (second final boss, or the ally: b.al)
 // table: texture, start y, name, weak points [x, y offsets in sprite sizes, hp, radius px]; tt = telegraph timer
-const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [[-.27, .3, 9, 30], [0, .38, 9, 30], [.27, .3, 9, 30]]], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]],
+const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [-1, 0, 1].map(i => [i * .27, .38 - i * i * .08, 9, 30])], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]],
   ['trooper', 560, 'PHAENON', [[.09, -.86, 14, 36], [.2, -.57, 14, 36], [-.43, -.5, 12, 36]]], ['boss', 520, 'PHELIOS', [[.1, -.58, 30, 80]]]];
 // the hostile bosses on screen (dying ones too) / still fighting
 const hb = () => BB.filter(b => b.on && !b.al);
@@ -257,8 +259,8 @@ const bossStart = () => {
   const k = lvl, ph = k > 2 && M.ph;
   BB.map((b, i) => {
     // VS: P2's boss is a giant hologram of the level's hero (kinds 5-7)
-    const q = i ? VS ? 4 + k : 4 : k, o = HE[k - 1][0], [tx, y, nm, w] = q > 4 ? [o, 290, up(o), [[0, -.1, 25 + k * 5, 70]]] : BT[q - 1];
-    OA(b, { on: !i || ph || VS, k: q, al: i && !VS && ph < 2, de: 0, fl: 0, t: 2.5, sh: 0, x: 400, y, vd: !i && k > 2 && M.ally != 'vidnah', mx: 0, c: 0 });
+    const q = i ? 4 + VS * k : k, o = HE[k - 1][0], [tx, y, nm, w] = q > 4 ? [o, 290, up(o), [[0, -.1, 25 + k * 5, 70]]] : BT[q - 1];
+    OA(b, { on: !i || ph || VS, k: q, al: i && !VS && ph < 2, de: 0, t: 2.5, sh: 0, x: 400, y, vd: !i && k > 2 && M.ally != 'vidnah', mx: 0, c: 0 });
     b.w = b.al ? [] : w.map(([x, y, hp, r]) => (b.mx += hp, { x, y, hp, r, m: hp }));
     b.on && (stx(b.s, tx).setOrigin(.5, q < 2 || q > 4 ? .5 : 1).visible = 1);
     i ? VS && bossT.setText(bossT.text + ' · ' + nm) : bossT.setText(ph > 1 ? 'PHAENON · PHELIOS' : nm);
@@ -344,7 +346,7 @@ const bossDraw = (b, dt) => {
 };
 
 // ---- players and weapons
-const addSc = (p, v, x, y) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), p.H); };
+const addSc = (p, v, x, y, c = p.H) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), c); };
 const combo = p => { const m = min(8, 1 + (++p.ch / 6 | 0)); m > p.mu && pop(p.x, p.y - 50, 'COMBO x' + (p.mu = m), YEL, 36); };
 // a hit lands on a random living player (or on player i when given)
 const hurt = (i, f) => {
@@ -367,9 +369,8 @@ const strike = (p, x, y, r, n, all) => {
   for (const b of B) if (b.on && hypot(b.X - x, b.Y - y) < b.r * .6 + r + 12) { off(b); boom(10, b.X, b.Y); addSc(p, 50, b.X, b.Y); k = 1; if (!all) return; }
   for (const t of E.filter(e => e.on && !e.de && !e.dk && abs(x - e.X) < e.W * .42 + r && y < e.Y + r && y > e.Y - e.H - r).sort((a, b) => a.z - b.z)) {
     k = 1;
-    if (t.k == 'c') t.de = .3, au('civ'), pop(t.X, t.Y - t.H, R`¡CIVIL! -1 SEÑAL`, RED), hurt(p.i, 1);
-    // VS: hitting your own side costs points
-    else if (!foe(p, t.k == 'm')) t.de = .3, au('civ'), p.sc = max(0, p.sc - 300), pop(t.X, t.Y - t.H, R`¡ALIADO! -300`, RED);
+    // a civilian costs SEÑAL; VS: hitting your own side costs points
+    if (t.k == 'c' || !foe(p, t.k == 'm')) t.de = .3, au('civ'), pop(t.X, t.Y - t.H, t.k == 'c' ? (hurt(p.i, 1), R`¡CIVIL! -1 SEÑAL`) : (p.sc = max(0, p.sc - 300), R`¡ALIADO! -300`), RED);
     else {
       t.fl = .07; boom(5, t.X, t.C); combo(p);
       (t.hp -= (n || (t.z < 2.6 ? 1 : .5)) * (t.k == 'p' && hypot(x - t.ex, y - t.ey) < t.H * .12 + 8 + r ? 3 : 1)) > 0 ? au('hit') : kill(t, p);
@@ -448,15 +449,17 @@ const selUp = () => {
   G = hg;
   P.map(p => { const o = p.i * 6; p.on && sr(p.ok ? 8 : 4, p.C, 70 + p.h * 260 + o, 86 + o, 140 - o * 2, 168 - o * 2); });
   const J = P.filter(p => p.on);
+  // VS: P2's card shows its Primero (HD portrait; name and weapon in the line below)
+  stx(AP, AL[P[1].h][0]).setPosition(140 + P[1].h * 260, 170).visible = VS;
   sD.setText((J[1] ? R`B3 · ${VS ? 'VS: HUMANOS vs PRIMEROS' : 'CO-OP'}
-` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${VS && p.i ? AL[p.h][1] : HE[p.h][3]}`).join('\n'));
+` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${hn(p)[VS && p.i ? 1 : 3]}`).join('\n'));
   const n = P[1].on + 1;
   if (P.every(p => p.ok)) {
     vis(SW, 0);
     run = sto('newRun', {}, world, n, J.map(p => HE[p.h][0]));
     P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, p.lv = 3, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
     lvl = 1; au('start');
-    VS ? startLevel(1) : dialog(beat('intro'), 'intro', () => startLevel(1));
+    dialog(VS || beat('intro'), 'intro', () => startLevel(1));
   }
 };
 const setBg = () => {
@@ -477,12 +480,13 @@ const startLevel = n => {
 };
 const nextStep = () => {
   const s = steps[++si];
-  if (!s) return lvl < 3 ? startLevel(lvl + 1) : VS ? ending() : dialog(beat('end'), 'end', ending);
+  if (!s) return lvl < 3 ? startLevel(lvl + 1) : dialog(VS || beat('end'), 'end', ending);
   const a = s.slice(1);
   stp = s[0]; sT = 0;
   if (stp == 'M') mv = +a;
   else if (stp == 'W') wq = a.split('|'), wg = wi = gT = 0, wt = .4;
-  else if (stp == 'B') VS ? nextStep() : dialog(beat(a), a, nextStep);
+  // VS: no story (an empty dialogue goes straight on)
+  else if (stp == 'B') dialog(VS || beat(a), a, nextStep);
   else bossStart();
 };
 const waveUp = dt => {
@@ -547,7 +551,7 @@ const dlgUp = dt => {
   const D = DL, n = D.ch.length;
   if (!D.vo) {
     const n0 = D.n | 0, L = D.s.length;
-    D.n = min(L, D.n + dt * (btn('P1_2') || btn('P2_2') ? 400 : 60));
+    D.n = min(L, D.n + dt * (P.some(p => btn(p.K[5])) ? 400 : 60));
     D.n < L || (D.w += dt);
     ah(4) | ah(5) ? D.n < L ? D.n = L : nextLine() : D.w > 7 && nextLine();
     return (D.n | 0) != n0 && dT.setText(D.s.slice(0, D.n | 0)) && (n0 % 3 || au('talk'));
@@ -573,10 +577,10 @@ const dlgDraw = dt => {
 // ---- ending, names, leaderboard, title
 const ending = () => {
   // VS: the other side wins when someone ran out of lives, else the higher score
-  const e = VS ? { title: P[0].lv < 1 || P[1].lv && P[1].sc > P[0].sc ? 'GANAN LOS PRIMEROS' : 'GANA LA RESISTENCIA', lines: ['RESISTENCIA ' + pad(P[0].sc), 'PRIMEROS ' + pad(P[1].sc)] } : sto('ending', {}, run);
+  const e = VS || sto('ending', {}, run);
   mode(END, 30); mus(null); au('win'); flash(900);
-  oT.setText(up(e.title || 'FIN'));
-  ovSet(21, WH, 340, arr(e.lines).join('\n\n'));
+  oT.setText(VS ? P[0].lv < 1 || P[1].lv && P[1].sc > P[0].sc ? 'GANAN LOS PRIMEROS' : 'GANA LA RESISTENCIA' : up(e.title || 'FIN'));
+  ovSet(21, WH, 340, VS ? `RESISTENCIA ${pad(P[0].sc)}\n\nPRIMEROS ${pad(P[1].sc)}` : arr(e.lines).join('\n\n'));
 };
 const names = () => {
   mode(NAMES, 30); ovSet(26, GOLD, 130);
@@ -603,8 +607,8 @@ const nameUp = () => {
 // stored scores: 3-letter names and non-negative scores only, best 5
 const valid = v => arr(v).filter(e => /^\w{3}$/.test(e && e.n) && e.s >= 0).sort((a, b) => b.s - a.s).slice(0, 5);
 const toTitle = () => {
-  mode(TITLE, 0); lr = odT = DL = 0; BB.map(off); vis(nL, 0);
-  [...E, ...B].map(off);
+  mode(TITLE, 0); lr = odT = DL = 0; vis(nL, 0);
+  [...E, ...B, ...BB].map(off);
   P.map(p => p.on = p.pl = 0);
   lvl = 1; setBg(); retex(); mus(0); vis(TI, 1); porSet(tP, 'fornax');
 };
@@ -766,6 +770,7 @@ B4 FIJAR OBJETIVO · B6 IA GRÁFICA ON/OFF · JOYSTICK APUNTAR`)];
 ${h[1]} · ${h[2]}
 DAÑO ${h[4]} · CAD ${h[5]} · ALC ${h[6]}`));
   });
+  SW.push(AP = OA(stx(u(img()), 'phelios'), { dw: 120, dh: 144 }));
   // HUD
   P.map(p => (p.T = tx(p.u - 147, 548, 24, p.H, '', 0), p.N = tx(p.u - 147, 516, 13, p.H, '', 0), p.L = tx(0, 0, 12, p.H, 'FIJADO')));
   bossT = tx(400, 22, 18, PH[1]);
