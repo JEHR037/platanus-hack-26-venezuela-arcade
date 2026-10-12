@@ -1,14 +1,14 @@
 // Procedural audio: Web Audio sfx + lookahead-scheduled music. Every entry point is try-wrapped (never throws).
 const AU = (() => {
   // voices start at time `at`, frequencies scaled by `pitch` (set by play / the music scheduler)
-  let ctx, comp, noise, at, next, step, last, timer, cur, pitch;
+  let ctx, comp, noise, at, track, next, step, last, timer, cur, pitch;
   const rnd = Math.random, TYPES = 'sawtooth square triangle bandpass'.split(' ');
   const floats = (n, fn) => new Float32Array(n).map(fn);
   // letter value: 'a' = 0
   const C = (s, i) => s.charCodeAt(i) - 97;
 
   // One voice: wave w (0-2 osc, 3 bandpass / 4 lowpass noise, 5 random crackle), f→g Hz sweep (pitch or cutoff),
-  // d secs, peak v, delay s, envelope shape a (≤.1 percussive, ~.2 sustained, ~2 swell)
+  // d secs, peak v, delay s, envelope shape a (<.15 percussive, ~.2 sustained, ~2 swell)
   const voice = (w, f, g, d, v, s = 0, a = 0) => {
     const t = at + s, e = ctx.createGain(), n = w > 2 ? ctx.createBufferSource() : ctx.createOscillator(),
       curve = (p, fn) => p.setValueCurveAtTime(floats(99, fn), t, d);
@@ -18,7 +18,7 @@ const AU = (() => {
     // (lowpass is the filter default)
     w < 4 && (x.type = TYPES[w]);
     curve(x.frequency, (_, i) => w > 4 ? rnd() * 4e3 : pitch * f * (g / f) ** (i / 98));
-    curve(e.gain, (_, i) => v * (w > 4 ? rnd() < .2 : (i /= 98) ** a * (1 - i) ** (a > .1 ? .5 : 4)));
+    curve(e.gain, (_, i) => v * (w > 4 ? rnd() < .2 : (i /= 98) ** a * (1 - i) ** (a > .15 ? .5 : 4)));
     x.connect(e).connect(comp);
     n.start(t, rnd()); n.stop(t + d);
   };
@@ -42,42 +42,44 @@ const AU = (() => {
     bomb: '3Aim{(y 4f1vul 0E(yUl^aehmq',
     beep: '1ZZQc',
     talk: '1LLI^',
-    boss: '0M`^e((afafaf',
+    boss: '0M`^e((afaf',
     win: '1OV^Y((aehm 2O(q]f^aehm',
     lose: '0LchY((hgfe 2<4scs',
     start: '1VTf]((af',
-    heal: '2ONc`((aehmqt',
+    heal: '2ONc`((aehmq',
     glitch: '5<<iu',
     k: '2A1^T',
     s: '3^U[V',
     h: '3pnLI',
   };
 
-  // Music: one theme in A minor (Am F C G). One char per 16th step; letters = semitones above E ('a' = E),
-  // '-' holds, '.' rest. Bass + arp are transposed by the bar's chord root; the arp uses only root/5th/octave/9th
-  // so every chord stays in key. Parts: [chord roots per bar, bass, arp, Andean pan-flute lead, drums k s h].
-  // n = 0 title: slow, no drums; 1-3 levels and 4 boss: drums, tempo rising with n.
-  const THEME = ['fbid', 'aama', 'amhmomhm', 'm---r-p-m---k-i-k-----i-f-------', 'k.hhs.hk'];
+  // Music in A minor: one char per 16th step; letters = semitones above E ('a' = E), '-' holds, '.' rest.
+  // Bass + arp are transposed by the bar's chord root; arps use only root/5th/octave(/9th) so chords stay in key.
+  // Track = [chord roots per bar (4 bars), bass, arp, Andean pan-flute lead, drums k s h].
+  // Title: Am G F G, held bass, rising open-fifth arp, descending zampoña ostinato (A G E D), no drums.
+  const TITLE = ['fdbd', 'a---', 'ahmtytmh', 'r---p---m---k---', ''];
+  // Action, shared by levels 1-3 and the boss (4), tempo rising with n: Am F C G, driving bass, pedal arp, motif, drums.
+  const ACTION = ['fbid', 'aama', 'amhmomhm', 'm---r-p-m---k-i-k-----i-f-------', 'k.hhs.hk'];
+  const TRACKS = [TITLE, ACTION, ACTION, ACTION, ACTION];
 
   // Lookahead scheduler: runs every 50 ms, schedules notes 200 ms ahead on the audio clock
   const tick = () => {
     // 16th-note step: .16 s title, then faster each level up to .093 s for the boss
-    const [prog, ...parts] = THEME, now = ctx.currentTime, d = .16 - cur / 60;
+    const [prog, ...parts] = track, now = ctx.currentTime, d = .16 - cur / 60;
     if (next < now) next = now;
     for (pitch = 1e4; next < now + .2; next += d, step++) {
       at = next;
       parts.map((q, k) => {
         let c = q[step % q.length], j = 1;
-        if (k > 2) cur && SFX[c] && run(SFX[c]);
+        if (k > 2) SFX[c] && run(SFX[c]);
         else if (c > '`') {
           // bass + arp follow the chord progression
           c = C(c) + (k < 2) * C(prog, step / 16 % 4);
           // E2 for the bass, an octave up per part
           const f = .00824 * 2 ** (k + c / 12);
           while (q[(step + j) % q.length] == '-') j++;
-          // saw bass, square arp, triangle pan flute + breath noise
-          voice(k, f, f, j * d, [.03, .015, .045][k], 0, k > 1 && .2);
-          k > 1 && voice(3, f, f, j * d, .03, 0, .2);
+          // saw bass, square arp (shapes 0 and .11: percussive), triangle pan flute (shape .22: sustained)
+          voice(k, f, f, j * d, [.03, .015, .05][k], 0, k / 9);
         }
       });
     }
@@ -88,7 +90,7 @@ const AU = (() => {
       if (n === cur && timer) return;
       // stopping only stops scheduling: notes already queued (≤ 200 ms) ring out
       cur = n; timer = clearInterval(timer);
-      if ([1, 1, 1, 1, 1][n] && ctx) {
+      if ((track = TRACKS[n]) && ctx) {
         next = step = 0; timer = setInterval(tick, 50); tick();
       }
     } catch {}
