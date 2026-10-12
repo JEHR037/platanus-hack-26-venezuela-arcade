@@ -94,21 +94,25 @@ for (const [k, v] of Object.entries({
 })) ASSETS[k] = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA' + v + 'AAAAAElFTkSuQmCC';
 
 // ---- 20-nn.js ----
-// Qawakun neural 4x upscaler v2 ("depixelize"). A tiny CNN on RGBA (four 3x3 conv layers of 8 channels + ReLU, then a
-// 1x1 to 48; 2,480 weights at 5 bits) looks at each low-res pixel's 9x9 neighbourhood and, for each of its 4x4 output
-// sub-pixels, predicts softmax blend weights over the 4 low-res pixels of that sub-pixel's quadrant (centre, horizontal,
-// vertical and diagonal neighbour). Trained on vector scenes rendered both as pixel art and as antialiased HD (plus the
-// author's art), it turns stair-steps into straight diagonals and smooth curves. The output is a premultiplied convex
-// blend of input colours, so edges stay crisp with no ringing or halos, and alpha gets the same smooth contours.
+// Qawakun neural 4x upscaler v3 ("depixelize"). A tiny CNN on RGBA (four 3x3 conv layers of 9 channels + ReLU, then a
+// 1x1 to 48; 3,027 weights) looks at each low-res pixel's 9x9 neighbourhood and, for each of its 4x4 output sub-pixels,
+// predicts softmax blend weights over the 4 low-res pixels of that sub-pixel's quadrant (centre, horizontal, vertical
+// and diagonal neighbour). v3 learned from a large super-resolution model (used only while training) and was then
+// specialised on this game's own images, so stair-steps become the clean lines and curves of a hand-drawn version.
+// The output is a premultiplied convex blend of input colours: edges stay crisp, with no ringing or halos, and alpha
+// gets the same smooth contours.
 function nnCore(src, w, h) {
-  const F = Float32Array, S = [.0692,.0217,.161,.0407,.105,.0826,.0682,.0443,.392,.186], n = w * h, W = w * 4, d = new Uint8ClampedArray(n * 64),
-    C = (v, m) => v < 0 ? 0 : v < m ? v : m - 1;
-  let o = 0, z = 0, v = 0, ci = 4, pw = w + 8, ph = h + 8, a;
-  // layers 3x8, 3x8, 3x8, 3x8, 1x48: 5-bit codes packed 6 bits per char ('0'..'p' minus backslash), weights [ky][kx][in][out]
-  // then biases, each with its own scale (v only needs its low 11 bits, so int32 overflow in << is harmless)
-  const P = [3,3,3,3,1].map((k, l) => [k, ...[k * k * ci * (ci = l > 3 ? 48 : 8), ci].map((m, b) => new F(m).map(c => (
-    z < 5 && (c = 'M23f`O1m8?Hje7`Rn[h`O1;i=8^lH?K3Bh^NnL<ZNkKg?ac2ab=C=WaNo47iO1SX@MYlh?Q1nX`Jg3jjO=li>Njmi?Pnl7dK1lW`Lk3iCNbeSRb2TWD:6n:dM51;aY9gH65ZeNcRn[B<n:Ch_:[LX?Lid^Z[:B6VPQdXENfk7>MEl88Nk57_QJ3m@Na:k@JQ;0;Y1jT[6cKhYDiYG_:JChaMbe8>O1pF=Nfm7JK5lh>[Uie]Ck2?J?J3XaG9Zh?Hg4W>Q247`Tj[79R6;h>Pfdh^Fo39XU5lG`Nn[h^Po;iaLo3Xa2g<7^HNKi>Jnl7cRYX6^VcCI^VZ2X^]QU5^Nj[i=O1m7`K1mW_I6;5_MF;FbU9]8?Q6;g_K1m7>Jn]gAM5dVaLnm7aM23h^No;h^Nk3Z>S=eh`C1dW_Q>DI>Q>57]Pj]i>Rnm6BE8TG<Lf]H^T_3Ff>k<7_K:@WbC1JFA@o3GcNYRkaQ237aPM]8@HnJI@Y:Ch=Rg;V@PUdGBS:dVbTk3X_TYnF_O5Sh?Ln<G_O1dW_U24W>C6DIaZk37?NU]9@No36`U6;4=Q1m6@Tk<6`Q1CfeOB;f>PjdX^HneXaC5L7`Jk;U@L^mU>O9eHbU6<9?K247>Tjl6^O6e7;Nk4F`Q4ki;U1chAI1lI?VfDWbFFLh>No3i`PjlW>Hj[i?Q9Li^RbZX_Nne8>S1lX^LfdiaO64I<Jk3H<Nfe6aLpSmeY_?X_Nf;j`Y9SgaDnl5CFo4V^RbmI`H^d5aJo2WAM1m7>To49`Q=lj@Fnl:AHkKi?P^cj^Y:D6BG62J=U1dE=Pj[6>P_3GaJne6eM=LK?LnSVaTblX>PbdHDK2<:DDjcf@Rc39?Hn[V`Jbd8?NgDH?O6CGbS23WeQ645`H_SF^VjL2@NnmgaG5mGPW>[9aDk4H?XnmWdHkD6`To[I;Vnd8@I=dX;PkK2YK:4S=WFSY?C5[U@QFTH[J^4F?W1f7?PjSHCOAe4HY217ALk3X^HoDh`Q2Bi@O9CgdNE3H=?6K8BS:;jb?9kUcM:SF]M1ljbPoT6AJj[i`Lne7@T^cW`M64H@U1m6?O63WAO62XBNj]6=M>KX`^6KYBI1dW^PflfdNn]GBP>CF`I2D<GNY^F:K2;G?WFJ7BA5E4bK>YE`O2[iAI>3i?M6:G^Nb[j]M5l7_Fg<8bO:;H@O2;U`Rbm6fM:4HCPfTIAG2<700NdVAQB47<Q2KYFS2EY_X_2gcRoD7CU:47?W2<G@Q6<HaNkDF`S2RZ>Hneh_EAkJDRk]VaTkSXZL^]H^S:47ZC=RYfPk47GW6DEbSFK6]Vnl7e<N47aM9mW^_Q]8_Pk3JBPnm7dTbch=Jfn9eO6;XAS5]GbP^mIeTg3idM247?U1liiK2[7gHgJfBM1[IDLc4F_PblVbVo5WbC6e5AO1mG`Hg;ggHYK<=OAlI`DnficRjFWXQEKXAHYm7;9F:gfV_dFbXV:k_M=DDaHndh@I=LW_L_45GUBCIYI^mXALfkG]Tk2hXPo48gO5dh[NRL7@Q5e6cRblXAQ1]G:Ng2X^W>46_RfBYcG:4H@Nk;h^S2DhCPg<9eK24GbO1m8]M24g?NX38aO><:>RfTGCC1dZbO>DG>Vo3X_PgT8YJcLE@M2;haRg;GAS=[i>8c=XAQ248<K1e7aM6LhaS9lX]Pk3idM5lW?S1eH@Q248@_<]iW0IJGUHo<3BTbQiZFnlgATfle_LMdWaK6;f`LQ[V`Jo<8?R_46@PgD8@Q1ld@PNDiARndh_K2DhbTQ3h;K1eE=PJ3haO1]3;N63iAO1KGXLo<7bVf;GTLo<FATnl6>Fjch?FbkW?Ffc6>Bbdh?LndW>Jo47?NnlX?LkLFbPb;W=I2<E?PYSH?G628`FnlbaPEcX=Jk;dBRUeFaU2<XbU1m6=Pc45aPMcf^F1bh_:j[F=JQ[7<FjSg_NjT7[Nndh=Njdh_Lo3caO23i@NN4WbU6<XbTndi?LjKV]Lbdi>LjKU;Lfdh>LbBf;HflW?JjK6]J^SgWNPld=PYYc9@920;@9ZAWB0QQ::E]4XLDK4:He'.charCodeAt(o++), v = v << 6 | c - 48 - (c > 92), z += 6),
-    ((v >> (z -= 5) & 31) - 15) * S[l * 2 + b])))]);
+  const F = Float32Array, S = [.0964,.0602,.172,.0589,.0759,.0982,.0894,.0668,.28,.143], n = w * h, W = w * 4, d = new Uint8ClampedArray(n * 64),
+    C = (v, m) => v < 0 ? 0 : v < m ? v : m - 1,
+    // next bit of the weight stream (6 bits per char, '0'..'p' minus backslash)
+    B = () => (z || (v = '1B9A081A;210908:1T01490502TD4DZ@R?j<ikU080;@80IOZ0R2RQ2J0[eQ25a21R0cP2R@D4:1iD?cN?dh1n@3YopZ?A];^n348mAnpdoT`SaRIbmXpQD7?JE4P>a`PibDWNU^0]4;83aT180@D;Y:P9dgc269oIB5cO_@00cpWT:pK22GAZ2PUm<UB4]0P9ISi7jUIVTmLIp[25@8<Y9Q1T9@ABQ6I1oiH2B=A03bU85P4PaR20W2540a8@0HGj<=Xdl9P<Q4R2Ap;_;@E2<jT@Xd?348TUHP1T220^HTeQ8;@3AO4<[6;03:281@:H@54a<2FP19@1008@08:PVX;1DTie@@V2Bb0QX^6L4iD:]11BDNmOV2ZIQ8ATT?AJRoF1:C0DbGcPomG>H_<4;5I=N]8PoaE]TaF<D:ffGCPkX]61hXIE1NRj<@X>6BPP05^HV:f@2R2CI3;@Q25f4FZ54eci@DTeDPF2TFF0Pc2TB40H2A1R>bJ8R4hP8A2<4XAc6TQ8aBBa1KD70e802:<D4JA0L<aRChKGP^Z21TQ?^YJ=e@2<^9i92BhGS1]ZigD@0322@0:::QR59R7H4@P0TaaC29TU0@0DPV@500B:U0UU>?k7in:YkaNGcdQ>XN0V338BD?<i2eiL8_Jd0X95PaUA1PYl0Y0WZ4Z_QSZN^_?5B;P:N2>8[PVdBf@A^;OBVmp:Q<:0@672@2baS3Jf_9ThAIgL:3lXf2V<6iblV6YlAETV24851cT2D1<Y0Z2i@XXi^CG1Q54Pa[YbNf<@:a3ZcJPpN5bdJC68IXeRH<61MDR^6Qp;OCTZcSh2Xd4<Ib4Np>:OioGDJi8WIf>GfSbf?VSWNBZ[M?e5c3j<kSScHoN]F_mP;Y5J[T[]ADhT;FDD<mJkH37Y?m`@TES3Z83Lo=G0:P;aZ:6[O:iD3CO_0P;QE4PX8e:1XcjDUP1K0E050@V0@g[1BK8m1^JeiajEWH92fDaKA0KbQW0f5NbI3b14B`=f3TD1D?kiiS6b7FcmIbf<P:Q0AY<X]1YDVBU<cDI<DcD8<L9A0CB40Yb<[gNKiTM@eT:::0D8e51RU[lp?mb[P6:E24GPbCHXaDaA558;58Q0eUF168Q8FG450UK5V8b2A<59DhaKI5E@RZ1Y3<@4VhYBEYENkDA3b[R>UH;G@IW6X5ZUJQ65B@Q0445ABZ]891@U61X@]:YdUTiD@100B<800XP0Y1A18=0C1P^ADB9aQXaLAYHS4<bI5aC1Y00W6XRZRC?1TY08@2G<JV]19;aBbk>:i_8SMLW75:5p53O2WlU]]@]lOJgHn7Q>N1I`5oRdRNV>X3i58=DA8N[C5;@Ri[1YSEE@RX=DjBTd]QP::I=4QSYX:40UB26RV2B@44@DT[Be8U:Q2E@52Z8ABB@<0X9@Q2B00180QX9<PBAC2@@QDXR<2[P28>RN:Y@89X<:0Q2H;W5I50HA80R5@E@eBU2;Q:52A0B102PTTZdE9U80X14P0V0X2Q08018157P3D@Xp[NbVE0omEMl4d1?lQIIcdVFaa19=cI96ZSD8af1e1XPRa9bS5ERLH=HbF:RYS1F6]c>D0RY6m`d4V96@_HR8DE797]:8EE0d:cd^`M[96gNFn^80<P4682A839aQP6cFC0>0K19Bnb6kMpT7]mXGBOd0j5BidDE2Pb<bVU486KMl[:GI<jLlRe<T@S4:<2:48A2S2R55YG@_5LJ4H4HLHK2T3I6cG4BQ^;:1;KWKNBcFC>Fm_@:HD2:52<>8QHQH@13XAAY00C@RQFA>HON?<nIdnpKjddOmhOlhjmW^oop`OWlhKh:ohlgN@'.charCodeAt(o++) - 48, v -= v > 44, z = 6), v >> --z & 1);
+  let o = 0, z = 0, v, ci = 4, pw = w + 8, ph = h + 8, a;
+  // layers 3x9, 3x9, 3x9, 3x9, 1x48: weights [ky][kx][in][out] then biases, each tensor with its own scale;
+  // every value is a zigzag integer in a Rice code (unary high part, then 2 low bits)
+  const P = [3,3,3,3,1].map((k, l) => [k, ...[k * k * ci * (ci = l > 3 ? 48 : 9), ci].map((m, b) => new F(m).map(c => {
+    for (c = 0; B();) c++;
+    return ((c = c * 4 + B() * 2 + B()) >> 1 ^ -(c & 1)) * S[l * 2 + b];
+  }))]);
   // input RGBA / 255 - .5, padded once by the receptive radius (clamp), then valid convs; ReLU is applied when reading
   a = new F(pw * ph * 4).map((_, i) => src[(C((i >> 2) / pw - 4 | 0, h) * w + C((i >> 2) % pw - 4, w)) * 4 + i % 4] / 255 - .5);
   P.map(([k, wt, b], l) => {
@@ -150,14 +154,14 @@ function nnUp(img) {
 // Procedural audio: Web Audio sfx + lookahead-scheduled music. Every entry point is try-wrapped (never throws).
 const AU = (() => {
   // voices start at time `at`, frequencies scaled by `pitch` (set by play / the music scheduler)
-  let ctx, comp, noise, at, next, step, last, timer, cur, pitch;
+  let ctx, comp, noise, at, track, next, step, last, timer, cur, pitch;
   const rnd = Math.random, TYPES = 'sawtooth square triangle bandpass'.split(' ');
   const floats = (n, fn) => new Float32Array(n).map(fn);
   // letter value: 'a' = 0
   const C = (s, i) => s.charCodeAt(i) - 97;
 
   // One voice: wave w (0-2 osc, 3 bandpass / 4 lowpass noise, 5 random crackle), f→g Hz sweep (pitch or cutoff),
-  // d secs, peak v, delay s, envelope shape a (≤.1 percussive, ~.2 sustained, ~2 swell)
+  // d secs, peak v, delay s, envelope shape a (<.15 percussive, ~.2 sustained, ~2 swell)
   const voice = (w, f, g, d, v, s = 0, a = 0) => {
     const t = at + s, e = ctx.createGain(), n = w > 2 ? ctx.createBufferSource() : ctx.createOscillator(),
       curve = (p, fn) => p.setValueCurveAtTime(floats(99, fn), t, d);
@@ -167,7 +171,7 @@ const AU = (() => {
     // (lowpass is the filter default)
     w < 4 && (x.type = TYPES[w]);
     curve(x.frequency, (_, i) => w > 4 ? rnd() * 4e3 : pitch * f * (g / f) ** (i / 98));
-    curve(e.gain, (_, i) => v * (w > 4 ? rnd() < .2 : (i /= 98) ** a * (1 - i) ** (a > .1 ? .5 : 4)));
+    curve(e.gain, (_, i) => v * (w > 4 ? rnd() < .2 : (i /= 98) ** a * (1 - i) ** (a > .15 ? .5 : 4)));
     x.connect(e).connect(comp);
     n.start(t, rnd()); n.stop(t + d);
   };
@@ -191,42 +195,44 @@ const AU = (() => {
     bomb: '3Aim{(y 4f1vul 0E(yUl^aehmq',
     beep: '1ZZQc',
     talk: '1LLI^',
-    boss: '0M`^e((afafaf',
+    boss: '0M`^e((afaf',
     win: '1OV^Y((aehm 2O(q]f^aehm',
     lose: '0LchY((hgfe 2<4scs',
     start: '1VTf]((af',
-    heal: '2ONc`((aehmqt',
+    heal: '2ONc`((aehmq',
     glitch: '5<<iu',
     k: '2A1^T',
     s: '3^U[V',
     h: '3pnLI',
   };
 
-  // Music: one theme in A minor (Am F C G). One char per 16th step; letters = semitones above E ('a' = E),
-  // '-' holds, '.' rest. Bass + arp are transposed by the bar's chord root; the arp uses only root/5th/octave/9th
-  // so every chord stays in key. Parts: [chord roots per bar, bass, arp, Andean pan-flute lead, drums k s h].
-  // n = 0 title: slow, no drums; 1-3 levels and 4 boss: drums, tempo rising with n.
-  const THEME = ['fbid', 'aama', 'amhmomhm', 'm---r-p-m---k-i-k-----i-f-------', 'k.hhs.hk'];
+  // Music in A minor: one char per 16th step; letters = semitones above E ('a' = E), '-' holds, '.' rest.
+  // Bass + arp are transposed by the bar's chord root; arps use only root/5th/octave(/9th) so chords stay in key.
+  // Track = [chord roots per bar (4 bars), bass, arp, Andean pan-flute lead, drums k s h].
+  // Title: Am G F G, held bass, rising open-fifth arp, descending zampoña ostinato (A G E D), no drums.
+  const TITLE = ['fdbd', 'a---', 'ahmtytmh', 'r---p---m---k---', ''];
+  // Action, shared by levels 1-3 and the boss (4), tempo rising with n: Am F C G, driving bass, pedal arp, motif, drums.
+  const ACTION = ['fbid', 'aama', 'amhmomhm', 'm---r-p-m---k-i-k-----i-f-------', 'k.hhs.hk'];
+  const TRACKS = [TITLE, ACTION, ACTION, ACTION, ACTION];
 
   // Lookahead scheduler: runs every 50 ms, schedules notes 200 ms ahead on the audio clock
   const tick = () => {
     // 16th-note step: .16 s title, then faster each level up to .093 s for the boss
-    const [prog, ...parts] = THEME, now = ctx.currentTime, d = .16 - cur / 60;
+    const [prog, ...parts] = track, now = ctx.currentTime, d = .16 - cur / 60;
     if (next < now) next = now;
     for (pitch = 1e4; next < now + .2; next += d, step++) {
       at = next;
       parts.map((q, k) => {
         let c = q[step % q.length], j = 1;
-        if (k > 2) cur && SFX[c] && run(SFX[c]);
+        if (k > 2) SFX[c] && run(SFX[c]);
         else if (c > '`') {
           // bass + arp follow the chord progression
           c = C(c) + (k < 2) * C(prog, step / 16 % 4);
           // E2 for the bass, an octave up per part
           const f = .00824 * 2 ** (k + c / 12);
           while (q[(step + j) % q.length] == '-') j++;
-          // saw bass, square arp, triangle pan flute + breath noise
-          voice(k, f, f, j * d, [.03, .015, .045][k], 0, k > 1 && .2);
-          k > 1 && voice(3, f, f, j * d, .03, 0, .2);
+          // saw bass, square arp (shapes 0 and .11: percussive), triangle pan flute (shape .22: sustained)
+          voice(k, f, f, j * d, [.03, .015, .05][k], 0, k / 9);
         }
       });
     }
@@ -237,7 +243,7 @@ const AU = (() => {
       if (n === cur && timer) return;
       // stopping only stops scheduling: notes already queued (≤ 200 ms) ring out
       cur = n; timer = clearInterval(timer);
-      if ([1, 1, 1, 1, 1][n] && ctx) {
+      if ((track = TRACKS[n]) && ctx) {
         next = step = 0; timer = setInterval(tick, 50); tick();
       }
     } catch {}
@@ -537,9 +543,9 @@ const mode = (m, t) => (md = m, mt = t, clearHits());
 const kill = (e, p, s) => {
   e.de = .22; hs = .04; au('kill');
   boom(20, e.X, e.C);
-  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen))
+  // fast kills pay more: points x 2 / (1 + ln(1 + seconds on screen)), in gold when x1.5 or better
   const f = 2 / (1 + log(1 + tm - e.b));
-  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H);
+  p && addSc(p, e.d[2] * f + .5 | 0, e.X, e.Y - e.H, f < 1.5 ? p.H : GOLD);
   s && pop(e.X, e.Y - e.H - 20, up(s), WC[s]);
 };
 const { hypot, exp, ceil, log } = Math;
@@ -581,7 +587,7 @@ CUENTA REGRESIVA 96%`, 'M2 Wtc|vpt|cvt M3 Bl2a M2 Wxr|qcx|pvp M4 Wdcd|xrx M3 X B
 let AG, ia = 1;
 let NW = 1, spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
 let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX, VD;
-let sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
+let AP, sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
 const KS = 'qn-scores', KW = 'qn-world', E = [], PO = [], PR = [], MG = new Set, VE = [0xffcc00, 0x00247d, 0xcf142b];
 
 // ---- more small helpers
@@ -628,9 +634,11 @@ const scene = () => {
   const l = lvl, m = l == 2;
   G = gg.clear();
   // ground: avenue + sidewalks / metro: light concrete platform with its yellow safety line, the (black) track pit with two steel rails
-  // on dark-blue supports, the ceiling with two long fluorescent strips (Roraima: the painted bg3 is the ground)
+  // on dark-blue supports, the ceiling with two long fluorescent strips / Roraima (the painted bg3 is the ground): soft
+  // cloud wisps drifting outwards below the platform on both sides, with the camera pan and bob
   if (l < 2) fq(0x48424f, -2.6, 2.6), fq(0x24212b, -1.7, 1.7);
   else if (m) fq(0x1d3a8c, 1.95, 2.95, -.49), rp(2, i => fq(0xc8c8d0, 2.16 + i * .6, 2.24 + i * .6, -.47)), fq(0x9c968a, -2.2, 1.3), fq(0xf2c200, 1.02, 1.3), fq(0x1c1a22, -2.2, 4, 2.8), rp(2, i => fq(0xe8eeff, i * 1.7 - 1.3, i * 1.7 - 1.18, 2.78));
+  else rp(6, i => G.fillStyle(0xfff0f4, .3).fillEllipse(400 - cx * 60 + (i % 2 * 2 - 1) * (250 + (tm * (9 + i * 2) + i * 70) % 220), hy + 175 + i * 18, 240, 26));
   for (let j = 13; j >= 0; j--) {
     const n = (cz / 3 | 0) + j, Z = n * 3 - cz, z0 = max(.4, Z), z1 = Z + 3, a = cl(1.7 - z0 / 15, 0, 1), sl = n % 2 * 2 - 1, X = sl * 1.85;
     if (z1 < .5) continue;
@@ -730,7 +738,7 @@ const eDraw = (e, dt) => {
 
 // ---- bosses, up to two at once (BB = [BS, B2]): kind 1 ship, 2 guardian, 3 Phaenon (final), 4 Phelios (second final boss, or the ally: b.al)
 // table: texture, start y, name, weak points [x, y offsets in sprite sizes, hp, radius px]; tt = telegraph timer
-const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [[-.27, .3, 9, 30], [0, .38, 9, 30], [.27, .3, 9, 30]]], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]],
+const BT = [['ship', -120, 'NAVE DE LOS PRIMEROS', [-1, 0, 1].map(i => [i * .27, .38 - i * i * .08, 9, 30])], ['purun', 700, R`GUARDIÁN ANCESTRAL`, [[-.2, -.8, 28, 36]]],
   ['trooper', 560, 'PHAENON', [[.09, -.86, 14, 36], [.2, -.57, 14, 36], [-.43, -.5, 12, 36]]], ['boss', 520, 'PHELIOS', [[.1, -.58, 30, 80]]]];
 // the hostile bosses on screen (dying ones too) / still fighting
 const hb = () => BB.filter(b => b.on && !b.al);
@@ -740,8 +748,8 @@ const bossStart = () => {
   const k = lvl, ph = k > 2 && M.ph;
   BB.map((b, i) => {
     // VS: P2's boss is a giant hologram of the level's hero (kinds 5-7)
-    const q = i ? VS ? 4 + k : 4 : k, o = HE[k - 1][0], [tx, y, nm, w] = q > 4 ? [o, 290, up(o), [[0, -.1, 25 + k * 5, 70]]] : BT[q - 1];
-    OA(b, { on: !i || ph || VS, k: q, al: i && !VS && ph < 2, de: 0, fl: 0, t: 2.5, sh: 0, x: 400, y, vd: !i && k > 2 && M.ally != 'vidnah', mx: 0, c: 0 });
+    const q = i ? 4 + VS * k : k, o = HE[k - 1][0], [tx, y, nm, w] = q > 4 ? [o, 290, up(o), [[0, -.1, 25 + k * 5, 70]]] : BT[q - 1];
+    OA(b, { on: !i || ph || VS, k: q, al: i && !VS && ph < 2, de: 0, t: 2.5, sh: 0, x: 400, y, vd: !i && k > 2 && M.ally != 'vidnah', mx: 0, c: 0 });
     b.w = b.al ? [] : w.map(([x, y, hp, r]) => (b.mx += hp, { x, y, hp, r, m: hp }));
     b.on && (stx(b.s, tx).setOrigin(.5, q < 2 || q > 4 ? .5 : 1).visible = 1);
     i ? VS && bossT.setText(bossT.text + ' · ' + nm) : bossT.setText(ph > 1 ? 'PHAENON · PHELIOS' : nm);
@@ -827,7 +835,7 @@ const bossDraw = (b, dt) => {
 };
 
 // ---- players and weapons
-const addSc = (p, v, x, y) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), p.H); };
+const addSc = (p, v, x, y, c = p.H) => { p.sc += v *= p.mu; pop(x, y, '+' + (v | 0), c); };
 const combo = p => { const m = min(8, 1 + (++p.ch / 6 | 0)); m > p.mu && pop(p.x, p.y - 50, 'COMBO x' + (p.mu = m), YEL, 36); };
 // a hit lands on a random living player (or on player i when given)
 const hurt = (i, f) => {
@@ -850,9 +858,8 @@ const strike = (p, x, y, r, n, all) => {
   for (const b of B) if (b.on && hypot(b.X - x, b.Y - y) < b.r * .6 + r + 12) { off(b); boom(10, b.X, b.Y); addSc(p, 50, b.X, b.Y); k = 1; if (!all) return; }
   for (const t of E.filter(e => e.on && !e.de && !e.dk && abs(x - e.X) < e.W * .42 + r && y < e.Y + r && y > e.Y - e.H - r).sort((a, b) => a.z - b.z)) {
     k = 1;
-    if (t.k == 'c') t.de = .3, au('civ'), pop(t.X, t.Y - t.H, R`¡CIVIL! -1 SEÑAL`, RED), hurt(p.i, 1);
-    // VS: hitting your own side costs points
-    else if (!foe(p, t.k == 'm')) t.de = .3, au('civ'), p.sc = max(0, p.sc - 300), pop(t.X, t.Y - t.H, R`¡ALIADO! -300`, RED);
+    // a civilian costs SEÑAL; VS: hitting your own side costs points
+    if (t.k == 'c' || !foe(p, t.k == 'm')) t.de = .3, au('civ'), pop(t.X, t.Y - t.H, t.k == 'c' ? (hurt(p.i, 1), R`¡CIVIL! -1 SEÑAL`) : (p.sc = max(0, p.sc - 300), R`¡ALIADO! -300`), RED);
     else {
       t.fl = .07; boom(5, t.X, t.C); combo(p);
       (t.hp -= (n || (t.z < 2.6 ? 1 : .5)) * (t.k == 'p' && hypot(x - t.ex, y - t.ey) < t.H * .12 + 8 + r ? 3 : 1)) > 0 ? au('hit') : kill(t, p);
@@ -931,15 +938,17 @@ const selUp = () => {
   G = hg;
   P.map(p => { const o = p.i * 6; p.on && sr(p.ok ? 8 : 4, p.C, 70 + p.h * 260 + o, 86 + o, 140 - o * 2, 168 - o * 2); });
   const J = P.filter(p => p.on);
+  // VS: P2's card shows its Primero (HD portrait; name and weapon in the line below)
+  stx(AP, AL[P[1].h][0]).setPosition(140 + P[1].h * 260, 170).visible = VS;
   sD.setText((J[1] ? R`B3 · ${VS ? 'VS: HUMANOS vs PRIMEROS' : 'CO-OP'}
-` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${VS && p.i ? AL[p.h][1] : HE[p.h][3]}`).join('\n'));
+` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${hn(p)[VS && p.i ? 1 : 3]}`).join('\n'));
   const n = P[1].on + 1;
   if (P.every(p => p.ok)) {
     vis(SW, 0);
     run = sto('newRun', {}, world, n, J.map(p => HE[p.h][0]));
     P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, p.lv = 3, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
     lvl = 1; au('start');
-    VS ? startLevel(1) : dialog(beat('intro'), 'intro', () => startLevel(1));
+    dialog(VS || beat('intro'), 'intro', () => startLevel(1));
   }
 };
 const setBg = () => {
@@ -960,12 +969,13 @@ const startLevel = n => {
 };
 const nextStep = () => {
   const s = steps[++si];
-  if (!s) return lvl < 3 ? startLevel(lvl + 1) : VS ? ending() : dialog(beat('end'), 'end', ending);
+  if (!s) return lvl < 3 ? startLevel(lvl + 1) : dialog(VS || beat('end'), 'end', ending);
   const a = s.slice(1);
   stp = s[0]; sT = 0;
   if (stp == 'M') mv = +a;
   else if (stp == 'W') wq = a.split('|'), wg = wi = gT = 0, wt = .4;
-  else if (stp == 'B') VS ? nextStep() : dialog(beat(a), a, nextStep);
+  // VS: no story (an empty dialogue goes straight on)
+  else if (stp == 'B') dialog(VS || beat(a), a, nextStep);
   else bossStart();
 };
 const waveUp = dt => {
@@ -1030,7 +1040,7 @@ const dlgUp = dt => {
   const D = DL, n = D.ch.length;
   if (!D.vo) {
     const n0 = D.n | 0, L = D.s.length;
-    D.n = min(L, D.n + dt * (btn('P1_2') || btn('P2_2') ? 400 : 60));
+    D.n = min(L, D.n + dt * (P.some(p => btn(p.K[5])) ? 400 : 60));
     D.n < L || (D.w += dt);
     ah(4) | ah(5) ? D.n < L ? D.n = L : nextLine() : D.w > 7 && nextLine();
     return (D.n | 0) != n0 && dT.setText(D.s.slice(0, D.n | 0)) && (n0 % 3 || au('talk'));
@@ -1056,10 +1066,10 @@ const dlgDraw = dt => {
 // ---- ending, names, leaderboard, title
 const ending = () => {
   // VS: the other side wins when someone ran out of lives, else the higher score
-  const e = VS ? { title: P[0].lv < 1 || P[1].lv && P[1].sc > P[0].sc ? 'GANAN LOS PRIMEROS' : 'GANA LA RESISTENCIA', lines: ['RESISTENCIA ' + pad(P[0].sc), 'PRIMEROS ' + pad(P[1].sc)] } : sto('ending', {}, run);
+  const e = VS || sto('ending', {}, run);
   mode(END, 30); mus(null); au('win'); flash(900);
-  oT.setText(up(e.title || 'FIN'));
-  ovSet(21, WH, 340, arr(e.lines).join('\n\n'));
+  oT.setText(VS ? P[0].lv < 1 || P[1].lv && P[1].sc > P[0].sc ? 'GANAN LOS PRIMEROS' : 'GANA LA RESISTENCIA' : up(e.title || 'FIN'));
+  ovSet(21, WH, 340, VS ? `RESISTENCIA ${pad(P[0].sc)}\n\nPRIMEROS ${pad(P[1].sc)}` : arr(e.lines).join('\n\n'));
 };
 const names = () => {
   mode(NAMES, 30); ovSet(26, GOLD, 130);
@@ -1086,8 +1096,8 @@ const nameUp = () => {
 // stored scores: 3-letter names and non-negative scores only, best 5
 const valid = v => arr(v).filter(e => /^\w{3}$/.test(e && e.n) && e.s >= 0).sort((a, b) => b.s - a.s).slice(0, 5);
 const toTitle = () => {
-  mode(TITLE, 0); lr = odT = DL = 0; BB.map(off); vis(nL, 0);
-  [...E, ...B].map(off);
+  mode(TITLE, 0); lr = odT = DL = 0; vis(nL, 0);
+  [...E, ...B, ...BB].map(off);
   P.map(p => p.on = p.pl = 0);
   lvl = 1; setBg(); retex(); mus(0); vis(TI, 1); porSet(tP, 'fornax');
 };
@@ -1249,6 +1259,7 @@ B4 FIJAR OBJETIVO · B6 IA GRÁFICA ON/OFF · JOYSTICK APUNTAR`)];
 ${h[1]} · ${h[2]}
 DAÑO ${h[4]} · CAD ${h[5]} · ALC ${h[6]}`));
   });
+  SW.push(AP = OA(stx(u(img()), 'phelios'), { dw: 120, dh: 144 }));
   // HUD
   P.map(p => (p.T = tx(p.u - 147, 548, 24, p.H, '', 0), p.N = tx(p.u - 147, 516, 13, p.H, '', 0), p.L = tx(0, 0, 12, p.H, 'FIJADO')));
   bossT = tx(400, 22, 18, PH[1]);
