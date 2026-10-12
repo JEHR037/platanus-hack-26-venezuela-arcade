@@ -1,5 +1,5 @@
 {
   "game_name": "ARRIVALS: LA INVASIÓN",
-  "description": "Rail shooter co-op estilo House of the Dead. La radiación que llamó a los Primeros ciega los visores; Qawakun, la IA nacida al romper el cifrado QSHA-1024, reconstruye la imagen con una red neuronal. Si te hieren, el mundo se pixela. Tus decisiones cambian la historia y Qawakun recuerda a cada equipo.",
+  "description": "Rail shooter cooperativo estilo House of the Dead con gráficos potenciados por una red neuronal: Qawakun, la IA del juego, reconstruye a 4x cada sprite de baja resolución con una CNN entrenada con el arte de Arrivals (B6 la activa o desactiva). 3 niveles y 3 jefes: Centro de Caracas, Metro de Caracas y la cima del Roraima contra Phaenon. Elige a Fornax, Sumer o Lukxed, cada uno con su arma: recarga, fija objetivos y usa el Overdrive. En co-op uno defiende y el otro ataca; en el modo VS, Humanos vs Primeros. Si te hieren, tu visor se pixela. Tus decisiones cambian la historia.",
   "player_mode": "two_player"
 }

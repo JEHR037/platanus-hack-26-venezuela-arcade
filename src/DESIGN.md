@@ -22,8 +22,8 @@ checked against the official restrictions.
 |---|---|---|
 | `00-input.js` | `CABINET_KEYS` (cabinet wiring — never change), `btn/hit/clearHits`, `store` (arcade bridge → localStorage → memory) | ~1.4 KB |
 | `10-assets.js` | `ASSETS`: low-res palette PNG data URIs | ~10.6 KB |
-| `20-nn.js` | `nnUp(img)` / `nnCore(rgba,w,h)`: neural 4x depixelizer | ~3.4 KB |
-| `30-audio.js` | `AU.init(ctx) / play(name) / music(n)`: procedural Web Audio | ~2.3 KB |
+| `20-nn.js` | `nnUp(img)` / `nnCore(rgba,w,h)`: neural 4x depixelizer (v3) | ~3.2 KB |
+| `30-audio.js` | `AU.init(ctx) / play(name) / music(n)`: procedural Web Audio | ~2.0 KB |
 | `40-story.js` | `STORY`: branching dialogue, mods, endings, cross-run world memory | ~9.1 KB |
 | `50-game.js` | Phaser scene: title, hero select, rail shooter, dialogue UI, HUD, continue, names, leaderboard | ~24.5 KB |
 
@@ -70,7 +70,7 @@ checked against the official restrictions.
 **Co-op roles:** boss fights are built for one player defending (shooting volleys and artillery down, interrupting Vidnah) while the other deals damage. Solo play gets smaller volleys and slower healing. In 2P the hint "P1 DEFIENDE · P2 ATACA" appears. In co-op, P1 alone picks the dialogue choices.
 
 **VS mode "HUMANOS vs PRIMEROS"** (2P; B3 on hero select toggles CO-OP / VS):
-- **Factions:** P1 is the resistance (Fornax, Sumer, Lukxed). P2 is los Primeros: Phelios · VOID CLAW, Vidnah · BIO SPORE, Phaenon · NEOCRUSH, reusing the three weapon behaviours.
+- **Factions:** P1 is the resistance (Fornax, Sumer, Lukxed). P2 is los Primeros (their HD portraits show on the select screen): Phelios · VOID CLAW, Vidnah · BIO SPORE, Phaenon · NEOCRUSH, reusing the three weapon behaviours.
 - **Waves:** mixed. Aliens attack P1 and armed militia attack P2. Hitting your own side costs 300 points.
 - **Lives:** 3 each. The rally runs through the three levels until someone loses all three. There is no story in VS.
 - **Bosses:** two per level, the alien boss for P1 and a hologram of Fornax, Sumer or Lukxed for P2.
@@ -89,7 +89,7 @@ Every attack is telegraphed by a red ring.
 **Systems:**
 - **SEÑAL ladder:** at 3, slight pixelate; at 2, strong; at 1 or below, raw low-res textures.
 - **Cooldowns:** per-weapon fire interval and reload, Sumer heat, Overdrive with 2 charges per run and a 25 s cooldown, a lock-cycle gate.
-- **Scoring:** a kill pays `round(base × 2 / (1 + ln(1 + t)))`, where t is the seconds the enemy was on screen (×2 for an instant kill, ~×0.84 at 3 s), then the combo multiplier up to x8. Continue is HotD-style (the score resets, the board keeps your best).
+- **Scoring:** a kill pays `round(base × 2 / (1 + ln(1 + t)))`, where t is the seconds the enemy was on screen (×2 for an instant kill, ~×0.84 at 3 s; gold popup at ≥ ×1.5), then the combo multiplier up to x8. Continue is HotD-style (the score resets, the board keeps your best).
 - **Persistence:** top 5 in `qn-scores`, world memory in `qn-world`.
 
 ## Module contracts
@@ -100,11 +100,11 @@ Every attack is telegraphed by a red ring.
   - backdrop: `bg3`
   - The game creates `key+'_hd'` with `nnUp` and `key+'_bc'` (bilinear) for the B6 toggle.
 - **`nnUp(img)`** returns a 4x canvas. **`nnCore(rgba,w,h)`** returns `{data,w,h}`.
-  - Shipped version: an RGBA blend-weight CNN that depixelizes.
+  - Shipped version **v3**: an RGBA blend-weight CNN with 9 channels and 3,027 params. Its weights are Rice-coded (~3.6 bits each), with the rounding of each weight optimised (AdaRound-style). It was distilled from a large teacher (Real-ESRGAN anime) and specialised on the 17 game assets over 11 measured improvement cycles. Against v2: +1.8 dB teacher agreement, edges 25 % narrower, and a smaller module.
 - **`AU`:**
   - `init(ctx)` must never throw.
   - `play(name)` names: shot empty reload hit kill hurt civ bomb beep talk boss win lose start heal glitch.
-  - `music(n)`: one Andean theme. 0 is the slow title version, 1–4 add drums at a rising tempo (4 = boss), `null` stops.
+  - `music(n)`: 0 = its own title arrangement (Am–G–F–G, descending pentatonic flute, no drums); 1–4 = the Andean action theme with drums at a rising tempo (4 = boss); `null` stops.
 - **`STORY`** (pure, deterministic, garbage-safe):
   - `newRun(world, players, heroes)`
   - `beat(run, id)` / `choose(run, id, i)` return `{lines:[{who,name,text}], choices:[...]}`
