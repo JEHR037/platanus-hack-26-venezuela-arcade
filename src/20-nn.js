@@ -1,18 +1,22 @@
-// Qawakun neural 4x upscaler v2 ("depixelize"). A tiny CNN on RGBA (four 3x3 conv layers of 8 channels + ReLU, then a
-// 1x1 to 48; 2,480 weights at 5 bits) looks at each low-res pixel's 9x9 neighbourhood and, for each of its 4x4 output
-// sub-pixels, predicts softmax blend weights over the 4 low-res pixels of that sub-pixel's quadrant (centre, horizontal,
-// vertical and diagonal neighbour). Trained on vector scenes rendered both as pixel art and as antialiased HD (plus the
-// author's art), it turns stair-steps into straight diagonals and smooth curves. The output is a premultiplied convex
-// blend of input colours, so edges stay crisp with no ringing or halos, and alpha gets the same smooth contours.
+// Qawakun neural 4x upscaler v3 ("depixelize"). A tiny CNN on RGBA (four 3x3 conv layers of 9 channels + ReLU, then a
+// 1x1 to 48; 3,027 weights) looks at each low-res pixel's 9x9 neighbourhood and, for each of its 4x4 output sub-pixels,
+// predicts softmax blend weights over the 4 low-res pixels of that sub-pixel's quadrant (centre, horizontal, vertical
+// and diagonal neighbour). v3 learned from a large super-resolution model (used only while training) and was then
+// specialised on this game's own images, so stair-steps become the clean lines and curves of a hand-drawn version.
+// The output is a premultiplied convex blend of input colours: edges stay crisp, with no ringing or halos, and alpha
+// gets the same smooth contours.
 function nnCore(src, w, h) {
-  const F = Float32Array, S = [.0692,.0217,.161,.0407,.105,.0826,.0682,.0443,.392,.186], n = w * h, W = w * 4, d = new Uint8ClampedArray(n * 64),
-    C = (v, m) => v < 0 ? 0 : v < m ? v : m - 1;
-  let o = 0, z = 0, v = 0, ci = 4, pw = w + 8, ph = h + 8, a;
-  // layers 3x8, 3x8, 3x8, 3x8, 1x48: 5-bit codes packed 6 bits per char ('0'..'p' minus backslash), weights [ky][kx][in][out]
-  // then biases, each with its own scale (v only needs its low 11 bits, so int32 overflow in << is harmless)
-  const P = [3,3,3,3,1].map((k, l) => [k, ...[k * k * ci * (ci = l > 3 ? 48 : 8), ci].map((m, b) => new F(m).map(c => (
-    z < 5 && (c = 'M23f`O1m8?Hje7`Rn[h`O1;i=8^lH?K3Bh^NnL<ZNkKg?ac2ab=C=WaNo47iO1SX@MYlh?Q1nX`Jg3jjO=li>Njmi?Pnl7dK1lW`Lk3iCNbeSRb2TWD:6n:dM51;aY9gH65ZeNcRn[B<n:Ch_:[LX?Lid^Z[:B6VPQdXENfk7>MEl88Nk57_QJ3m@Na:k@JQ;0;Y1jT[6cKhYDiYG_:JChaMbe8>O1pF=Nfm7JK5lh>[Uie]Ck2?J?J3XaG9Zh?Hg4W>Q247`Tj[79R6;h>Pfdh^Fo39XU5lG`Nn[h^Po;iaLo3Xa2g<7^HNKi>Jnl7cRYX6^VcCI^VZ2X^]QU5^Nj[i=O1m7`K1mW_I6;5_MF;FbU9]8?Q6;g_K1m7>Jn]gAM5dVaLnm7aM23h^No;h^Nk3Z>S=eh`C1dW_Q>DI>Q>57]Pj]i>Rnm6BE8TG<Lf]H^T_3Ff>k<7_K:@WbC1JFA@o3GcNYRkaQ237aPM]8@HnJI@Y:Ch=Rg;V@PUdGBS:dVbTk3X_TYnF_O5Sh?Ln<G_O1dW_U24W>C6DIaZk37?NU]9@No36`U6;4=Q1m6@Tk<6`Q1CfeOB;f>PjdX^HneXaC5L7`Jk;U@L^mU>O9eHbU6<9?K247>Tjl6^O6e7;Nk4F`Q4ki;U1chAI1lI?VfDWbFFLh>No3i`PjlW>Hj[i?Q9Li^RbZX_Nne8>S1lX^LfdiaO64I<Jk3H<Nfe6aLpSmeY_?X_Nf;j`Y9SgaDnl5CFo4V^RbmI`H^d5aJo2WAM1m7>To49`Q=lj@Fnl:AHkKi?P^cj^Y:D6BG62J=U1dE=Pj[6>P_3GaJne6eM=LK?LnSVaTblX>PbdHDK2<:DDjcf@Rc39?Hn[V`Jbd8?NgDH?O6CGbS23WeQ645`H_SF^VjL2@NnmgaG5mGPW>[9aDk4H?XnmWdHkD6`To[I;Vnd8@I=dX;PkK2YK:4S=WFSY?C5[U@QFTH[J^4F?W1f7?PjSHCOAe4HY217ALk3X^HoDh`Q2Bi@O9CgdNE3H=?6K8BS:;jb?9kUcM:SF]M1ljbPoT6AJj[i`Lne7@T^cW`M64H@U1m6?O63WAO62XBNj]6=M>KX`^6KYBI1dW^PflfdNn]GBP>CF`I2D<GNY^F:K2;G?WFJ7BA5E4bK>YE`O2[iAI>3i?M6:G^Nb[j]M5l7_Fg<8bO:;H@O2;U`Rbm6fM:4HCPfTIAG2<700NdVAQB47<Q2KYFS2EY_X_2gcRoD7CU:47?W2<G@Q6<HaNkDF`S2RZ>Hneh_EAkJDRk]VaTkSXZL^]H^S:47ZC=RYfPk47GW6DEbSFK6]Vnl7e<N47aM9mW^_Q]8_Pk3JBPnm7dTbch=Jfn9eO6;XAS5]GbP^mIeTg3idM247?U1liiK2[7gHgJfBM1[IDLc4F_PblVbVo5WbC6e5AO1mG`Hg;ggHYK<=OAlI`DnficRjFWXQEKXAHYm7;9F:gfV_dFbXV:k_M=DDaHndh@I=LW_L_45GUBCIYI^mXALfkG]Tk2hXPo48gO5dh[NRL7@Q5e6cRblXAQ1]G:Ng2X^W>46_RfBYcG:4H@Nk;h^S2DhCPg<9eK24GbO1m8]M24g?NX38aO><:>RfTGCC1dZbO>DG>Vo3X_PgT8YJcLE@M2;haRg;GAS=[i>8c=XAQ248<K1e7aM6LhaS9lX]Pk3idM5lW?S1eH@Q248@_<]iW0IJGUHo<3BTbQiZFnlgATfle_LMdWaK6;f`LQ[V`Jo<8?R_46@PgD8@Q1ld@PNDiARndh_K2DhbTQ3h;K1eE=PJ3haO1]3;N63iAO1KGXLo<7bVf;GTLo<FATnl6>Fjch?FbkW?Ffc6>Bbdh?LndW>Jo47?NnlX?LkLFbPb;W=I2<E?PYSH?G628`FnlbaPEcX=Jk;dBRUeFaU2<XbU1m6=Pc45aPMcf^F1bh_:j[F=JQ[7<FjSg_NjT7[Nndh=Njdh_Lo3caO23i@NN4WbU6<XbTndi?LjKV]Lbdi>LjKU;Lfdh>LbBf;HflW?JjK6]J^SgWNPld=PYYc9@920;@9ZAWB0QQ::E]4XLDK4:He'.charCodeAt(o++), v = v << 6 | c - 48 - (c > 92), z += 6),
-    ((v >> (z -= 5) & 31) - 15) * S[l * 2 + b])))]);
+  const F = Float32Array, S = [.0964,.0602,.172,.0589,.0759,.0982,.0894,.0668,.28,.143], n = w * h, W = w * 4, d = new Uint8ClampedArray(n * 64),
+    C = (v, m) => v < 0 ? 0 : v < m ? v : m - 1,
+    // next bit of the weight stream (6 bits per char, '0'..'p' minus backslash)
+    B = () => (z || (v = '1B9A081A;210908:1T01490502TD4DZ@R?j<ikU080;@80IOZ0R2RQ2J0[eQ25a21R0cP2R@D4:1iD?cN?dh1n@3YopZ?A];^n348mAnpdoT`SaRIbmXpQD7?JE4P>a`PibDWNU^0]4;83aT180@D;Y:P9dgc269oIB5cO_@00cpWT:pK22GAZ2PUm<UB4]0P9ISi7jUIVTmLIp[25@8<Y9Q1T9@ABQ6I1oiH2B=A03bU85P4PaR20W2540a8@0HGj<=Xdl9P<Q4R2Ap;_;@E2<jT@Xd?348TUHP1T220^HTeQ8;@3AO4<[6;03:281@:H@54a<2FP19@1008@08:PVX;1DTie@@V2Bb0QX^6L4iD:]11BDNmOV2ZIQ8ATT?AJRoF1:C0DbGcPomG>H_<4;5I=N]8PoaE]TaF<D:ffGCPkX]61hXIE1NRj<@X>6BPP05^HV:f@2R2CI3;@Q25f4FZ54eci@DTeDPF2TFF0Pc2TB40H2A1R>bJ8R4hP8A2<4XAc6TQ8aBBa1KD70e802:<D4JA0L<aRChKGP^Z21TQ?^YJ=e@2<^9i92BhGS1]ZigD@0322@0:::QR59R7H4@P0TaaC29TU0@0DPV@500B:U0UU>?k7in:YkaNGcdQ>XN0V338BD?<i2eiL8_Jd0X95PaUA1PYl0Y0WZ4Z_QSZN^_?5B;P:N2>8[PVdBf@A^;OBVmp:Q<:0@672@2baS3Jf_9ThAIgL:3lXf2V<6iblV6YlAETV24851cT2D1<Y0Z2i@XXi^CG1Q54Pa[YbNf<@:a3ZcJPpN5bdJC68IXeRH<61MDR^6Qp;OCTZcSh2Xd4<Ib4Np>:OioGDJi8WIf>GfSbf?VSWNBZ[M?e5c3j<kSScHoN]F_mP;Y5J[T[]ADhT;FDD<mJkH37Y?m`@TES3Z83Lo=G0:P;aZ:6[O:iD3CO_0P;QE4PX8e:1XcjDUP1K0E050@V0@g[1BK8m1^JeiajEWH92fDaKA0KbQW0f5NbI3b14B`=f3TD1D?kiiS6b7FcmIbf<P:Q0AY<X]1YDVBU<cDI<DcD8<L9A0CB40Yb<[gNKiTM@eT:::0D8e51RU[lp?mb[P6:E24GPbCHXaDaA558;58Q0eUF168Q8FG450UK5V8b2A<59DhaKI5E@RZ1Y3<@4VhYBEYENkDA3b[R>UH;G@IW6X5ZUJQ65B@Q0445ABZ]891@U61X@]:YdUTiD@100B<800XP0Y1A18=0C1P^ADB9aQXaLAYHS4<bI5aC1Y00W6XRZRC?1TY08@2G<JV]19;aBbk>:i_8SMLW75:5p53O2WlU]]@]lOJgHn7Q>N1I`5oRdRNV>X3i58=DA8N[C5;@Ri[1YSEE@RX=DjBTd]QP::I=4QSYX:40UB26RV2B@44@DT[Be8U:Q2E@52Z8ABB@<0X9@Q2B00180QX9<PBAC2@@QDXR<2[P28>RN:Y@89X<:0Q2H;W5I50HA80R5@E@eBU2;Q:52A0B102PTTZdE9U80X14P0V0X2Q08018157P3D@Xp[NbVE0omEMl4d1?lQIIcdVFaa19=cI96ZSD8af1e1XPRa9bS5ERLH=HbF:RYS1F6]c>D0RY6m`d4V96@_HR8DE797]:8EE0d:cd^`M[96gNFn^80<P4682A839aQP6cFC0>0K19Bnb6kMpT7]mXGBOd0j5BidDE2Pb<bVU486KMl[:GI<jLlRe<T@S4:<2:48A2S2R55YG@_5LJ4H4HLHK2T3I6cG4BQ^;:1;KWKNBcFC>Fm_@:HD2:52<>8QHQH@13XAAY00C@RQFA>HON?<nIdnpKjddOmhOlhjmW^oop`OWlhKh:ohlgN@'.charCodeAt(o++) - 48, v -= v > 44, z = 6), v >> --z & 1);
+  let o = 0, z = 0, v, ci = 4, pw = w + 8, ph = h + 8, a;
+  // layers 3x9, 3x9, 3x9, 3x9, 1x48: weights [ky][kx][in][out] then biases, each tensor with its own scale;
+  // every value is a zigzag integer in a Rice code (unary high part, then 2 low bits)
+  const P = [3,3,3,3,1].map((k, l) => [k, ...[k * k * ci * (ci = l > 3 ? 48 : 9), ci].map((m, b) => new F(m).map(c => {
+    for (c = 0; B();) c++;
+    return ((c = c * 4 + B() * 2 + B()) >> 1 ^ -(c & 1)) * S[l * 2 + b];
+  }))]);
   // input RGBA / 255 - .5, padded once by the receptive radius (clamp), then valid convs; ReLU is applied when reading
   a = new F(pw * ph * 4).map((_, i) => src[(C((i >> 2) / pw - 4 | 0, h) * w + C((i >> 2) % pw - 4, w)) * 4 + i % 4] / 255 - .5);
   P.map(([k, wt, b], l) => {
