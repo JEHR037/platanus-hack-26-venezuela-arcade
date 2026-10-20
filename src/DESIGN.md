@@ -11,7 +11,8 @@ Constraints:
 ## Build
 
 `game.js` is the single built file: the `src/NN-*.js` modules are concatenated in name order into one IIFE, then
-checked against the official restrictions.
+checked against the official restrictions. Run `node tools/build.mjs` (needs `npm install`); it prints per-module sizes and the
+checker result, and exits non-zero on failure.
 
 - **Never edit `game.js` by hand.** It is generated from `src/`.
 - **Mangling:** top-level names inside the IIFE are mangled, but string contents and object property names are not.
@@ -25,7 +26,7 @@ checked against the official restrictions.
 | `20-nn.js` | `nnUp(img)` / `nnCore(rgba,w,h)`: neural 4x depixelizer (v3) | ~3.2 KB |
 | `30-audio.js` | `AU.init(ctx) / play(name) / music(n)`: procedural Web Audio | ~2.0 KB |
 | `40-story.js` | `STORY`: branching dialogue, mods, endings, cross-run world memory | ~9.1 KB |
-| `50-game.js` | Phaser scene: title, hero select, rail shooter, dialogue UI, HUD, continue, names, leaderboard | ~24.5 KB |
+| `50-game.js` | Phaser scene: title, attract demo, hero select, rail shooter, dialogue UI, HUD, continue, names, leaderboard | ~26.8 KB |
 
 ## Premise and lore (author-approved)
 
@@ -58,7 +59,7 @@ checked against the official restrictions.
 
 | Hero | Weapon | Behaviour | Rounds | Fire | Reload |
 |---|---|---|---|---|---|
-| Fornax | KEEPER X9 · Nuclear | Guided missile, area blast, homes on the lock | 6 | 0.35 s | 1.3 s |
+| Fornax | KEEPER X9 · Nuclear | Guided missile, area blast (bites every boss weak point in reach), homes on the lock | 6 | 0.35 s | 1.3 s |
 | Sumer | SIC KLE-A · Pólvora | Auto burst, ×2 damage up close, overheats | 18 | 0.09 s | 1.0 s |
 | Lukxed | RAILGUN SR · Pólvora | Piercing beam, ×2 damage on weak points | 4 | 0.6 s | 1.6 s |
 
@@ -74,7 +75,9 @@ checked against the official restrictions.
 - **Waves:** mixed. Aliens attack P1 and armed militia attack P2. Hitting your own side costs 300 points.
 - **Lives:** 3 each. The rally runs through the three levels until someone loses all three. There is no story in VS.
 - **Bosses:** two per level, the alien boss for P1 and a hologram of Fornax, Sumer or Lukxed for P2.
-- **Ending:** the winner screen ("GANA LA RESISTENCIA" / "GANAN LOS PRIMEROS"), then name entry.
+- **Ending:** the winner screen ("GANA LA RESISTENCIA" / "GANAN LOS PRIMEROS"), then back to the title. VS scores never enter the
+  co-op TOP 5, and a VS match is not filed in the world memory.
+- **Targeting:** every enemy shot, boss volley and artillery zone targets its own side; an Overdrive only clears the shots at you.
 
 **Enemies** (table `ET`):
 - drone: figure-8 flight, dives
@@ -90,7 +93,9 @@ Every attack is telegraphed by a red ring.
 - **SEÑAL ladder:** at 3, slight pixelate; at 2, strong; at 1 or below, raw low-res textures.
 - **Cooldowns:** per-weapon fire interval and reload, Sumer heat, Overdrive with 2 charges per run and a 25 s cooldown, a lock-cycle gate.
 - **Scoring:** a kill pays `round(base × 2 / (1 + ln(1 + t)))`, where t is the seconds the enemy was on screen (×2 for an instant kill, ~×0.84 at 3 s; gold popup at ≥ ×1.5), then the combo multiplier up to x8. Continue is HotD-style (the score resets, the board keeps your best).
-- **Persistence:** top 5 in `qn-scores`, world memory in `qn-world`.
+- **Persistence:** top 5 in `qn-scores`, world memory in `qn-world` (co-op only).
+- **Attract mode:** after 25 s idle on the title, a bot plays level 1 for 60 s: no story, it cannot be hurt, nothing is saved.
+  START or B1 returns to the title.
 
 ## Module contracts
 
@@ -98,7 +103,8 @@ Every attack is telegraphed by a red ring.
   - portraits, 40×48 opaque: `fornax sumer phaenon vidnah qawakun phelios lukxed`
   - sprites, alpha 0/255: `drone trooper vandal purun civ boss ship car moto`
   - backdrop: `bg3`
-  - The game creates `key+'_hd'` with `nnUp` and `key+'_bc'` (bilinear) for the B6 toggle.
+  - The game creates `key+'_bc'` (bilinear) for the B6 toggle at boot, and `key+'_hd'` with `nnUp` one asset per frame once the
+    splash is on screen (the CNN takes ~0.5-1.5 s in total, which used to be a black screen); until then a sprite shows its raw LR.
 - **`nnUp(img)`** returns a 4x canvas. **`nnCore(rgba,w,h)`** returns `{data,w,h}`.
   - Shipped version **v3**: an RGBA blend-weight CNN with 9 channels and 3,027 params. Its weights are Rice-coded (~3.6 bits each), with the rounding of each weight optimised (AdaRound-style). It was distilled from a large teacher (Real-ESRGAN anime) and specialised on the 17 game assets over 11 measured improvement cycles. Against v2: +1.8 dB teacher agreement, edges 25 % narrower, and a smaller module.
 - **`AU`:**

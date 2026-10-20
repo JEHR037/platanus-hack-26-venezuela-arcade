@@ -95,11 +95,11 @@ CUENTA REGRESIVA 96%`, 'M2 Wtc|vpt|cvt M3 Bl2a M2 Wxr|qcx|pvp M4 Wdcd|xrx M3 X B
   ['RORAIMA', R`Responde al llamado de Fornax
 5.143333°  -60.762500°`, 'M3 Wxtx|cxd|vxv M3 Bl3a M2 Wpxt|xvx|dpd M3 X Bl3b']];
 
-let AG, ia = 1;
+let AG, ia = 1, DM = 0;
 let NW = 1, spd = 0, rt = 0, cz = 0, cx, hy, lr, q, glt = 0, odT, hs, hf, WL, UL, pix, gg, fg, hg, dG, em, si, steps, sT, mv;
 let snT, suT, wq, wg, wi, wt, gT, nE, poi = 0, wT = 0, MS = [], FX = [], WA, WX, VD;
 let AP, sp, tBar, tB, tPress, TI, SW, sD, dPor, dN, dT, dC = [], bossT, ov, oT, eH, nL;
-const KS = 'qn-scores', KW = 'qn-world', E = [], PO = [], PR = [], MG = new Set, VE = [0xffcc00, 0x00247d, 0xcf142b];
+const KS = 'qn-scores', KW = 'qn-world', E = [], NQ = [], PO = [], PR = [], MG = new Set, VE = [0xffcc00, 0x00247d, 0xcf142b];
 
 // ---- more small helpers
 const ring = (w, c, a, x, y, r) => G.lineStyle(w, c, a).strokeCircle(x, y, r);
@@ -137,7 +137,12 @@ const porUp = (o, d) => { o.p = min(1, o.p + d); const f = o.h.frame; o.h.setCro
 const porVis = (o, v) => vis([o.l, o.h], v);
 
 // ---- scenes: perspective quads in world space (x lateral, h height, z depth); far parts fade into the dark
-const Q = (c, a, ...v) => { G.fillStyle(c, a).beginPath(); for (let i = 0; i < 12; i += 3) G.lineTo(PX(v[i], v[i + 2]), PY(v[i + 1], v[i + 2])); G.fillPath(); };
+// (two triangles: the quads are convex, and fillTriangle skips the per-path Earcut triangulation of fillPath, ~300 per frame)
+const Q = (c, a, ...v) => {
+  const p = [];
+  for (let i = 0; i < 12; i += 3) p.push(PX(v[i], v[i + 2]), PY(v[i + 1], v[i + 2]));
+  G.fillStyle(c, a).fillTriangle(...p).fillTriangle(p[0], p[1], ...p.slice(4));
+};
 // a floor/ceiling quad at height h, or (z0 == z1) an upright face from h up to h1, narrowing by t at the top
 const hq = (c, a, x0, x1, h, z0, z1, h1 = h, t = 0) => Q(c, a, x0, h, z0, x1, h, z0, x1 - t, h1, z1, x0 + t, h1, z1);
 const fq = (c, x0, x1, h = 0) => hq(c, 1, x0, x1, h, .4, 40);
@@ -277,24 +282,27 @@ const bossChk = b => {
     banner(R`¡JEFE DERROTADO!`, '+3000', YEL);
   }
 };
-// boss hit test around (x, y) with radius r: n damage, weak points take x wm
-const bossHit = (p, x, y, r, n, wm) => bos().filter(b => foe(p, b.k > 4)).some(b => {
+// boss hit test around (x, y) with radius r: n damage, weak points take x wm; all = an area/pierce hit bites every weak point in reach
+const bossHit = (p, x, y, r, n, wm, all) => bos().filter(b => foe(p, b.k > 4)).some(b => {
   const k = b.k, top = b.y - b.H * b.s.originY;
+  let h = 0;
   // Vidnah's hologram cannot be destroyed: a hit only staggers her (no healing for 4 s)
   if (b.vd && hypot(x - VD.x, y - VD.y) < 60 + r) return b.vs > 1 || (b.vs = 4, pop(x, y - 40, R`¡INTERRUMPIDA!`, TEAL)), boom(6, x, y), 1;
   if (abs(x - b.x) > b.W * .45 + r || y < top - r || y > top + b.H + r) return;
   for (const w of b.w) if (w.hp > 0 && hypot(x - w.X, y - w.C) < w.r + r) {
     // closed: the L2 eye between volleys, Phaenon's shield, Phelios unless green
     if (k == 2 ? !(b.op > 0) : k == 3 ? b.sh : k > 3 && b.ci < 2) return tm > wT && (wT = tm + 1.5, pop(x, y - 30, k < 4 ? R`¡ESCUDO!` : R`¡SOLO EN VERDE!`, '#B98CFF')), 1;
-    w.hp -= n * wm; b.fl = .05; boom(6, x, y); au('hit'); combo(p); p.sc += 30 * p.mu;
-    w.hp > 0 || boom(40, x, y);
-    return bossChk(b), 1;
+    w.hp -= n * wm; b.fl = .05; boom(6, w.X, w.C); au('hit'); combo(p); p.sc += 30 * p.mu;
+    w.hp > 0 || boom(40, w.X, w.C);
+    h = 1;
+    if (!all) break;
   }
-  return boom(2, x, y), 1;
+  return h ? bossChk(b) : boom(2, x, y), 1;
 });
 const bossUp = (b, dt) => {
   // shots per burst / volley are fewer solo; two bosses share the plateau (Phaenon left, Phelios right)
-  const k = b.k, n = live()[1] ? 5 : 3, w0 = b.w[0], two = hb()[1];
+  // VS: P1's boss shoots at P1, P2's hologram at P2 (co-op: any player)
+  const k = b.k, n = live()[1] ? 5 : 3, w0 = b.w[0], two = hb()[1], tg = VS ? +(k > 4) : null;
   if (b.de) {
     rand() < .35 && boom(14, b.x + rnd(-.4, .4) * b.W, b.y - (k < 2 ? rnd(-.4, .4) : rnd(.1, .9)) * b.H) && cam.shake(80, .01);
     // shrinking away (bossDraw); L3: thrown off the side of the platform, down into the clouds
@@ -320,8 +328,8 @@ const bossUp = (b, dt) => {
     b.t = k < 2 ? 1.8 : k < 4 ? 1.2 : 2.6;
     w && (w.tt = .75);
   }
-  b.w.map(w => w.tt > 0 && (w.tt -= dt) <= 0 && w.hp > 0 && (k == 2 && (b.op = 1.8), k == 3 && ++b.c % 3 < 1 && rp(n, () => shot(rnd(-.9, .9), 0, rnd(1.6, 3), 0xff3d3d, 2.4)),
-    rp(k < 2 || n, i => shot((w.X - 400) / 175 + cx + (i - 1) * .4, 1 - (w.C - hy) / 103, 3.2 + (k == 3) * i * .35, k == 3 ? 0x73ff8a : 0xff3d6e, 0, VS ? +(k > 4) : null))));
+  b.w.map(w => w.tt > 0 && (w.tt -= dt) <= 0 && w.hp > 0 && (k == 2 && (b.op = 1.8), k == 3 && ++b.c % 3 < 1 && rp(n, () => shot(rnd(-.9, .9), 0, rnd(1.6, 3), 0xff3d3d, 2.4, tg)),
+    rp(k < 2 || n, i => shot((w.X - 400) / 175 + cx + (i - 1) * .4, 1 - (w.C - hy) / 103, 3.2 + (k == 3) * i * .35, k == 3 ? 0x73ff8a : 0xff3d6e, 0, tg))));
 };
 const bossDraw = (b, dt) => {
   const s = b.s, k = b.k, w0 = b.w[0];
@@ -351,7 +359,7 @@ const combo = p => { const m = min(8, 1 + (++p.ch / 6 | 0)); m > p.mu && pop(p.x
 // a hit lands on a random living player (or on player i when given)
 const hurt = (i, f) => {
   const p = i == null ? pick(live()) : P[i];
-  if (!p || p.hp <= 0 || p.inv > 0 && !f) return;
+  if (!p || DM || p.hp <= 0 || p.inv > 0 && !f) return;
   p.hp--; p.inv = 1.2; p.ch = 0; p.mu = 1; glt = .5;
   cam.shake(260, .016); hf = 1; au('hurt');
   pop(p.u, 505, R`-1 SEÑAL`, RED, 26);
@@ -377,7 +385,7 @@ const strike = (p, x, y, r, n, all) => {
     }
     if (!all) return;
   }
-  bossHit(p, x, y, r, n || .5, p.h > 1 ? 2 : 1) || k || (p.ch = 0, p.mu = 1, boom(2, x, y));
+  bossHit(p, x, y, r, n || .5, p.h > 1 ? 2 : 1, all) || k || (p.ch = 0, p.mu = 1, boom(2, x, y));
 };
 // KEEPER X9 launches a tracking missile, SIC KLE-A fires a fast burst, RAILGUN SR pierces with a beam from below
 const fire = p => {
@@ -400,7 +408,8 @@ const bomb = p => {
   p.bc = 25;
   odT = f ? 6 : 1.5; au('bomb'); cam.shake(500, .02); flash(300); fx(0xf8c20b, 400, 300, 650);
   banner('QAWAKUN OVERDRIVE', f ? R`SEÑAL HD RESTAURADA` : 'POTENCIA -75%', GOLD);
-  B.map(off);
+  // VS: only the shots flying at you
+  B.map(b => (!VS || b.T == p.i) && off(b));
   foes().map(e => foe(p, e.k == 'm') && (f || --e.hp <= 0) && kill(e, p));
   bos().filter(b => foe(p, b.k > 4)).map(b => { let n = b.mx / (f ? 4 : 16) | 0; for (const w of b.w) { const m = min(max(w.hp, 0), n); w.hp -= m; n -= m; } bossChk(b); });
 };
@@ -408,7 +417,9 @@ const bomb = p => {
 // the boss is up and not dying
 const tgs = () => [...foes().filter(e => e.st), ...bos().flatMap(b => b.w.filter(w => w.hp > 0))].sort((a, b) => a.X - b.X);
 const ctrl = (p, dt) => {
-  const k = p.K, ix = btn(k[3]) - btn(k[2]), iy = btn(k[1]) - btn(k[0]), H = HE[p.h];
+  // demo: the bot sticks to a target (leftmost first), steers to it and fires once on it
+  const b = DM && (ok(p.bt) ? p.bt : p.bt = tgs()[0]), k = p.K, H = HE[p.h],
+    ix = DM ? b ? cl((b.X - p.x) / 40, -1, 1) : 0 : btn(k[3]) - btn(k[2]), iy = DM ? b ? cl((b.C - p.y) / 40, -1, 1) : 0 : btn(k[1]) - btn(k[0]);
   p.inv -= dt; p.cd -= dt; p.hx = max(0, p.hx - dt * .5);
   // the magazine refills when the reload ends; Overdrive announces when it is ready again
   p.rl > 0 && (p.rl -= dt) <= 0 && (p.am = H[8]);
@@ -424,8 +435,8 @@ const ctrl = (p, dt) => {
   let t = p.lk, bd = 46;
   if (!t) for (const e of foes()) e.st && foe(p, e.k == 'm') && d(e) < bd && (bd = d(e), t = e);
   if (t) { const f = min(1, dt * (p.lk ? 12 : p.a > .4 ? 1.5 : 6)); p.x += (t.X - p.x) * f; p.y += (t.C - p.y) * f; }
-  (hit(k[4]) | btn(k[4])) && p.cd <= 0 && fire(p);
-  hit(k[5]) && p.am < H[8] && p.rl <= 0 && (p.rl = H[9], au('reload'));
+  (DM ? b && hypot(b.X - p.x, b.C - p.y) < 30 : hit(k[4]) | btn(k[4])) && p.cd <= 0 && fire(p);
+  (DM ? !p.am : hit(k[5])) && p.am < H[8] && p.rl <= 0 && (p.rl = H[9], au('reload'));
   hit(k[6]) && bomb(p);
 };
 
@@ -454,14 +465,16 @@ const selUp = () => {
   sD.setText((J[1] ? R`B3 · ${VS ? 'VS: HUMANOS vs PRIMEROS' : 'CO-OP'}
 ` : '') + J.map(p => R`${p.n} ${up(hn(p)[0])}${p.ok ? R` ✔` : ''} · ${hn(p)[VS && p.i ? 1 : 3]}`).join('\n'));
   const n = P[1].on + 1;
-  if (P.every(p => p.ok)) {
-    vis(SW, 0);
-    run = sto('newRun', {}, world, n, J.map(p => HE[p.h][0]));
-    P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, p.lv = 3, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
-    lvl = 1; au('start');
-    dialog(VS || beat('intro'), 'intro', () => startLevel(1));
-  }
+  P.every(p => p.ok) && (vis(SW, 0), go(n, J), dialog(VS || beat('intro'), 'intro', () => startLevel(1)));
 };
+// a new run for the first n players (J: their heroes)
+const go = (n, J) => {
+  run = sto('newRun', {}, world, n, J.map(p => HE[p.h][0]));
+  P.map(p => (p.bo = 2, p.bc = 0, p.mx = 5, p.bs = 0, p.lv = 3, reset(p), p.on = p.pl = p.ok = p.i < n, p.x = 300 + p.i * 200, p.y = 330));
+  lvl = 1; au('start');
+};
+// attract mode: after 25 s idle on the title a bot plays level 1 for 60 s (no story, can't be hurt, nothing saved)
+const demo = () => { VS = 0; DM = 60; vis(TI, 0); P[0].h = rand() * 3 | 0; go(1, [P[0]]); startLevel(1); };
 const setBg = () => {
   // L3: the painted Roraima summit, full screen; otherwise El Ávila on the horizon
   stx(bg, lvl > 2 ? 'bg3' : 'av').setOrigin(.5, lvl > 2 ? .5 : 1);
@@ -471,11 +484,12 @@ const setBg = () => {
 const hn = p => VS && p.i ? AL[p.h] : HE[p.h];
 const startLevel = n => {
   const L = LV[n - 1];
-  let a = M.ally;
   lvl = n; NW = n > 2 ? .6 : 1; steps = L[2].split(' '); si = -1; cz = 0; upMods(); setBg();
+  // (read after upMods: a VS match must not inherit the last co-op run's ally)
+  const a = M.ally || M.sniper && 'lukxed';
   // mission card
   banner(VS ? 'RESISTENCIA vs PRIMEROS' : R`MISIÓN ${n} · ${L[0]}`, L[1], PH[0]); mus(n); md = PLAY; snT = 6; suT = 4;
-  (a = a || M.sniper && 'lukxed') && pop(400, 300, up(a) + ' TE CUBRE', WC[a]);
+  a && pop(400, 300, up(a) + ' TE CUBRE', WC[a]);
   nextStep();
 };
 const nextStep = () => {
@@ -486,7 +500,7 @@ const nextStep = () => {
   if (stp == 'M') mv = +a;
   else if (stp == 'W') wq = a.split('|'), wg = wi = gT = 0, wt = .4;
   // VS: no story (an empty dialogue goes straight on)
-  else if (stp == 'B') dialog(VS || beat(a), a, nextStep);
+  else if (stp == 'B') dialog(VS || DM || beat(a), a, nextStep);
   else bossStart();
 };
 const waveUp = dt => {
@@ -607,7 +621,7 @@ const nameUp = () => {
 // stored scores: 3-letter names and non-negative scores only, best 5
 const valid = v => arr(v).filter(e => /^\w{3}$/.test(e && e.n) && e.s >= 0).sort((a, b) => b.s - a.s).slice(0, 5);
 const toTitle = () => {
-  mode(TITLE, 0); lr = odT = DL = 0; vis(nL, 0);
+  mode(TITLE, 0); lr = odT = DL = DM = 0; vis(nL, 0);
   [...E, ...B, ...BB].map(off);
   P.map(p => p.on = p.pl = 0);
   lvl = 1; setBg(); retex(); mus(0); vis(TI, 1); porSet(tP, 'fornax');
@@ -630,7 +644,7 @@ B6 · ` + iaT());
   G = hg; box(0xff4fd8, 466, 222, 298, 240);
   sr(3, 0x50f2c4, 66, 228, 188, 224);
   tP.p < 1 && rect(0xffffff, 1, 60, y - 1, 200, 3);
-  hit(P[0].K[7]) ? startGame(1) : hit(P[1].K[7]) && startGame(2);
+  hit(P[0].K[7]) ? startGame(1) : hit(P[1].K[7]) ? startGame(2) : mt < -25 && demo();
 };
 
 // ---- per-frame rendering: SEÑAL degradation, world, HUD
@@ -692,7 +706,7 @@ RÉCORD ${pad(max(...P.map(fsc)))}`);
       p.rl > 0 ? arc(5, x, y, r + 9, 1 - p.rl / H[9], 0xf2e205) : p.cd > .3 && arc(5, x, y, r + 9, 1 - p.cd / 1.2, 0xff3d5a);
       t && sr(3, c, t.X - s, t.C - s, s * 2, s * 2) && pos(p.L, t.X, t.C - s - 12);
     }
-    p.T.setText(`${p.n} ${!al ? p.on ? R`SIN SEÑAL · START` : PS : pad(p.sc) + (p.mu > 1 ? ' x' + p.mu : '')}`).setAlpha(al || tm % 1 < .6 ? 1 : .3).visible = on;
+    p.T.setText(`${DM ? "DEMO" : p.n} ${!al ? p.on ? R`SIN SEÑAL · START` : PS : pad(p.sc) + (p.mu > 1 ? ' x' + p.mu : '')}`).setAlpha(al || tm % 1 < .6 ? 1 : .3).visible = on;
     p.N.setText(up(hn(p)[0]) + ' · ' + hn(p)[1]).visible = on && p.on;
     if (!on) continue;
     box(c, x0, 528, 322, 66);
@@ -716,11 +730,11 @@ RÉCORD ${pad(max(...P.map(fsc)))}`);
 const preload = function () { S = this; for (const k in ASSETS) this.load.image(k, ASSETS[k]); };
 const create = function () {
   T = S.textures;
-  // per asset: LR stays pixel-sharp, _hd from the neural upscaler, _bc a smooth (bilinear) upscale for IA OFF; failures fall back to LR
+  // per asset: LR stays pixel-sharp, _bc a smooth (bilinear) upscale for IA OFF, _hd from the neural upscaler (queued in NQ:
+  // one asset per frame from update(), so the splash shows at once instead of a ~1.5 s black screen); failures fall back to LR
   for (const k in ASSETS) if (T.exists(k)) {
-    const t = T.get(k), s = t.getSourceImage();
-    t.setFilter(1); T.addImage(k + '_bc', s);
-    try { T.addCanvas(k + '_hd', nnUp(s)); } catch (e) { }
+    const t = T.get(k);
+    t.setFilter(1); T.addImage(k + '_bc', t.getSourceImage()); NQ.push(k);
   }
   G = S.make.graphics({}, false);
   rp(8, r => circ(0xffffff, .16, 8, 8, 8 - r));
@@ -802,9 +816,14 @@ const update = function (t, d) {
   rt += spd * dt; cz += spd * dt;
   cx = sin(rt * .35) * .35; hy = HY + sin(rt * 6) * 1.5 * min(spd, 1);
   hg.clear(); dG.clear();
+  // neural upscaler queue (see create): one asset per frame, after the splash is on screen
+  const k = tm > .1 && NQ.shift();
+  k && (safe(() => T.addCanvas(k + "_hd", nnUp(T.get(k).getSourceImage()))), retex());
   // B6 (either player): neural upscaler ON/OFF at any time
   ah(9) && (ia ^= 1, retex(), pop(400, 300, iaT(), GOLD, 30));
-  md == SPL ? splUp() : md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && names()
+  // demo: ends after 60 s, or on START / B1
+  DM && ((DM -= dt) < 0 || ah(4) | ah(7)) && toTitle();
+  md == SPL ? splUp() : md == TITLE ? titleUp(dt) : md == SEL ? selUp() : md == PLAY ? playUp(dt) : md == DLG ? dlgUp(dt) : md == NAMES ? nameUp() : md == END ? ((ah(4) | ah(5)) && mt < 28 || mt < 0) && (VS ? toTitle : names)()
     : md == CONT && (P.map(p => hit(p.K[7]) && (revive(p), md = PLAY, mus(BS.on ? 4 : lvl))), mt < 0 && md == CONT && (banner('GAME OVER', '', PH[1]), names()));
   draw(dt);
   hud(dt);
